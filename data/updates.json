@@ -1,0 +1,228 @@
+{
+  "_note": "Curated content. Edit by hand or with a daily Claude task. Live data (PSI, NEA outlook, hotspots, haze areas, headlines) is fetched automatically every 30 minutes into data/live.json.",
+  "updatedAt": "2026-10-12T10:00:00+08:00",
+  "background": [
+    "PSI first crossed into the unhealthy band on 4 September 2026, the first time since October 2023. Daily NEA haze advisories have been issued since then.",
+    "Smoke is drifting in from fires in southern and central Sumatra and from Kalimantan, carried by south-easterly and southerly winds.",
+    "A very strong El Niño and a positive Indian Ocean Dipole have kept the region dry. Forecasters expect the dry season to end only in late October or early November.",
+    "In Malaysia, schools have closed across Kuala Lumpur, Selangor, Johor and four other areas, and a state of emergency was declared in Serian, Sarawak, in September."
+  ],
+  "news": [
+    {
+      "date": "2026-10-11",
+      "region": "sg",
+      "topic": "air-quality",
+      "title": "Haze lingers over Singapore on Grand Prix race day",
+      "summary": "Air quality stayed unhealthy on Sunday 11 October. At 5pm the 24-hour PSI ranged from 113 to 154 across the island, while 1-hour PM2.5 ranged from 50 to 113.",
+      "source": "CNA",
+      "url": "https://www.channelnewsasia.com/singapore/haze-persists-singapore-air-quality-6449771"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "sg",
+      "topic": "air-quality",
+      "title": "Central PSI reaches 192, the worst reading of 2026",
+      "summary": "By 6pm on 9 October the 24-hour PSI hit 192 in the central region, 187 in the west, 167 in the south, 166 in the east and 135 in the north. All five regions were in the unhealthy band.",
+      "source": "Bernama",
+      "url": "https://bernama.com/en/world/news.php?id=2617934"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "sg",
+      "topic": "policy",
+      "title": "Haze Task Force readies N95 mask distribution and school closure rules",
+      "summary": "If the PSI enters the very unhealthy range, People's Association grassroots groups will hand out N95 masks to vulnerable residents, collectable with an NRIC from vending machines at transport hubs, Social Service Offices and PA venues. MOE will consider closing schools when the next day's forecast is hazardous (PSI above 300). Employers who still need staff outdoors are urged to provide N95 masks.",
+      "source": "Mothership",
+      "url": "https://mothership.sg/2026/10/haze-task-force-step-up-measures/"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "sg",
+      "topic": "policy",
+      "title": "Singapore Grand Prix runs with haze contingency plans",
+      "summary": "The Singapore Tourism Board worked with the race promoter and the Haze Task Force on tiered plans tied to PSI and PM2.5 levels, including on-site medical help and N95 masks for spectators if needed.",
+      "source": "Bernama",
+      "url": "https://bernama.com/en/world/news.php?id=2617934"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "sg",
+      "topic": "air-quality",
+      "title": "NEA traces smoke to Sumatra and West Kalimantan",
+      "summary": "NEA's advisory said moderate to dense smoke plumes from southern and central Sumatra and West Kalimantan were drifting towards Singapore, with dry weather expected to persist over the fire areas.",
+      "source": "Malay Mail",
+      "url": "https://www.malaymail.com/amp/news/singapore/2026/10/09/singapore-haze-worsens-as-central-regions-air-quality-nears-2026-high-smoke-from-indonesia-continues-to-drift-in/238308"
+    },
+    {
+      "date": "2026-10-07",
+      "region": "sg",
+      "topic": "air-quality",
+      "title": "First all-unhealthy forecast since advisories began",
+      "summary": "For the first time since daily advisories started on 4 September, NEA forecast the PSI to sit entirely within the unhealthy band of 101 to 200.",
+      "source": "The Star",
+      "url": "https://www.thestar.com.my/aseanplus/aseanplus-news/2026/10/08/singapore-shrouded-in-haze-psi-readings-in-the-unhealthy-range-across-the-island"
+    },
+    {
+      "date": "2026-09-04",
+      "region": "sg",
+      "topic": "policy",
+      "title": "PSI turns unhealthy and the Haze Task Force activates",
+      "summary": "The 24-hour PSI entered the unhealthy range at 7am on 4 September, its first unhealthy reading since 8 October 2023. The 28-agency Haze Task Force activated its action plans and NEA began daily advisories with a 24-hour PSI forecast.",
+      "source": "Bernama",
+      "url": "https://bernama.com/en/world/news.php?id=2602994"
+    },
+    {
+      "date": "2026-09-04",
+      "region": "sg",
+      "topic": "policy",
+      "title": "What schools and employers must do during haze",
+      "summary": "Every classroom in MOE primary and secondary schools, junior colleges, MOE Kindergartens and SPED schools has an air purifier. MOM reminded employers to follow its haze guidelines and tripartite advisories. N95 masks are not needed for short exposure such as commuting.",
+      "source": "NEA",
+      "url": "https://www.nea.gov.sg/media/news/news/index/singapore-government-agencies-implement-measures-to-mitigate-impact-of-haze-Aug2026"
+    },
+    {
+      "date": "2026-08-05",
+      "region": "sg",
+      "topic": "policy",
+      "title": "Minister outlines tiered haze response in Parliament",
+      "summary": "Minister Grace Fu said the Haze Task Force was convened in April to put response plans on standby. Plans are tiered and switch on at set 24-hour PSI thresholds, guided also by satellite hotspot data, wind and rainfall forecasts.",
+      "source": "MSE",
+      "url": "https://www.mse.gov.sg/latest-news/written-reply-to-parliamentary-question-on-haze-task-force-s-response-plans/"
+    },
+    {
+      "date": "2026-06",
+      "region": "sg",
+      "topic": "policy",
+      "title": "MOM tells employers to stock a week of N95 masks",
+      "summary": "Employers should carry out haze risk assessments, keep at least a one-week supply of N95 masks, provide masks for outdoor work and take a flexible approach to leave during haze episodes.",
+      "source": "HRO",
+      "url": "https://www.humanresourcesonline.net/haze-in-singapore-what-employers-need-to-know-to-protect-workers-and-support-business-continuity"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "id",
+      "topic": "fires",
+      "title": "Indonesia logs 20,946 hotspots, most in Central Kalimantan",
+      "summary": "The Forestry Ministry's SiPongi system detected 20,946 hotspots in 24 hours, 1,202 of them high confidence. Central Kalimantan led with 7,309, followed by South Papua and South Sumatra.",
+      "source": "Katadata",
+      "url": "https://databoks.katadata.co.id/en/demographics/statistics/55eb6187f276ba8/ministry-of-forestry-detects-20946-hotspots-in-indonesia-most-in-central-kalimantan-friday-9-october-2026"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "id",
+      "topic": "fires",
+      "title": "Hotspot count drops but rain stays scarce",
+      "summary": "Using a narrower count, the ministry reported 387 hotspots on 8 October, down 67% from a day earlier. BMKG still expects low rainfall over about two-thirds of Indonesia in mid-October, including southern Sumatra and central and southern Kalimantan.",
+      "source": "Bernama",
+      "url": "https://bernama.com/en/world/news.php?id=2617551"
+    },
+    {
+      "date": "2026-10-06",
+      "region": "id",
+      "topic": "fires",
+      "title": "Hotspots peak at 21,708 nationwide",
+      "summary": "SiPongi recorded 21,708 hotspots in 24 hours, the highest count in early October, with 7,384 in Central Kalimantan alone.",
+      "source": "Katadata",
+      "url": "https://databoks.katadata.co.id/en/demographics/statistics/132f2b0d990c25d/ministry-of-forestry-indonesia-reached-21708-hotspots-in-last-24-hours-tuesday-6-october-2026"
+    },
+    {
+      "date": "2026-08-27",
+      "region": "id",
+      "topic": "policy",
+      "title": "Indonesia lets Malaysia cloud-seed in its airspace",
+      "summary": "Indonesia's environment minister welcomed Malaysian cloud-seeding along the border. The disaster agency BNPB has 52 aircraft working six priority provinces, but limited water, poor visibility and smouldering peat make the fires hard to put out.",
+      "source": "Asia News Network",
+      "url": "https://asianews.network/malaysia-cloud-seeding-assist-tests-indonesias-limits-as-haze-crosses-borders/"
+    },
+    {
+      "date": "2026-08-25",
+      "region": "id",
+      "topic": "fires",
+      "title": "Palembang prays for rain as South Sumatra burns",
+      "summary": "Thousands gathered for rain prayers in Palembang. Nearly 940 square kilometres burned across Indonesia in July alone, and 30 aircraft plus 22 helicopters were running water-bombing and cloud-seeding sorties.",
+      "source": "AP via Michigan Public",
+      "url": "https://www.michiganpublic.org/2026-08-25/indonesians-brave-choking-smoke-to-pray-for-rain-as-country-battles-wildfires"
+    },
+    {
+      "date": "2026-03-29",
+      "region": "id",
+      "topic": "policy",
+      "title": "Riau on fire emergency alert until 30 November",
+      "summary": "Riau province declared an emergency alert for forest and land fires on 13 February, in force until 30 November, after an unusually early start to the burning season.",
+      "source": "The Vibes",
+      "url": "https://www.thevibes.com/articles/world/121259/authorities-battle-early-season-blazes-in-indonesia-amid-warnings-of-godzilla-el-nino"
+    },
+    {
+      "date": "2026-08-27",
+      "region": "regional",
+      "topic": "climate",
+      "title": "ASMC raises southern ASEAN to its highest haze alert",
+      "summary": "The ASEAN Specialised Meteorological Centre activated Alert Level 3, signalling a high risk of severe transboundary haze, as smoke spread from Kalimantan and Sumatra.",
+      "source": "Bernama",
+      "url": "https://www.bernama.com/en/world/news.php?id=2599580"
+    },
+    {
+      "date": "2026-10-07",
+      "region": "regional",
+      "topic": "climate",
+      "title": "Dry season may last into November",
+      "summary": "Forecasters expect Singapore to move out of dry conditions only in late October or early November, later than in the past two years, as the strong El Niño suppresses rain.",
+      "source": "Malay Mail",
+      "url": "https://www.malaymail.com/amp/news/singapore/2026/10/07/haze-blankets-singapore-with-three-regions-recording-unhealthy-air-for-over-24-hours/237997"
+    },
+    {
+      "date": "2026-09-03",
+      "region": "regional",
+      "topic": "climate",
+      "title": "Why experts don't expect a repeat of 2015",
+      "summary": "2026 is a super El Niño year like 2015, but it began around June rather than April, so it overlaps less with the dry season. Hotspot counts so far are lower than in 2015.",
+      "source": "The Star",
+      "url": "https://www.thestar.com.my/aseanplus/aseanplus-news/2026/09/03/haze-caused-by-many-factors-but-repeat-of-2015-crisis-unlikely-due-to-later-onset-of-el-nino-singapore-experts"
+    },
+    {
+      "date": "2026-05-14",
+      "region": "regional",
+      "topic": "climate",
+      "title": "What a 'Godzilla' El Niño means for Singapore",
+      "summary": "A super El Niño forms when central Pacific surface waters run more than 2°C above average. Scientists flagged a haze risk for Singapore, Malaysia, Sumatra and Borneo from August to November 2026 and again from February to May 2027.",
+      "source": "Asia News Network",
+      "url": "https://asianews.network/what-is-a-godzilla-el-nino-and-how-could-it-affect-singapore/"
+    },
+    {
+      "date": "2026-10-09",
+      "region": "my",
+      "topic": "policy",
+      "title": "Malaysia shuts schools for about two million students",
+      "summary": "Schools closed in Kuala Lumpur, Putrajaya, Selangor, Negeri Sembilan, Melaka, Johor and Rompin in Pahang. KL's API was around 170. Prime Minister Anwar Ibrahim raised the fires with President Prabowo and asked for an urgent ASEAN environment ministers' meeting.",
+      "source": "Al Jazeera",
+      "url": "https://www.aljazeera.com/news/2026/10/9/malaysia-shuts-schools-as-haze-from-indonesian-fires-chokes-southeast-asia"
+    },
+    {
+      "date": "2026-10-08",
+      "region": "my",
+      "topic": "policy",
+      "title": "New API thresholds for closing Malaysian schools",
+      "summary": "From 9 October, schools must close where the API exceeds 180. From 12 October, they must also close where the API stays above 150 for three days in a row.",
+      "source": "Ground News",
+      "url": "https://ground.news/article/34da6d95-9878-4cd2-8ad9-1a904cff78d6"
+    },
+    {
+      "date": "2026-10-07",
+      "region": "my",
+      "topic": "air-quality",
+      "title": "Batu Pahat closes all 176 schools",
+      "summary": "All schools, kindergartens and nurseries in Batu Pahat, Johor, closed after the district's API reached 203. Unhealthy readings spread to 35 areas nationwide.",
+      "source": "The Vibes",
+      "url": "https://www.thevibes.com/articles/news/128063/batu-pahat-schools-shut-as-haze-worsens-across-malaysia"
+    },
+    {
+      "date": "2026-09-04",
+      "region": "my",
+      "topic": "policy",
+      "title": "State of emergency declared in Serian, Sarawak",
+      "summary": "The King consented to an emergency declaration for Serian after its API passed 500. Kuching recorded a hazardous 311, and a three-day cloud-seeding operation was launched over Sarawak.",
+      "source": "Al Jazeera",
+      "url": "https://www.aljazeera.com/news/2026/9/5/malaysia-declares-emergency-in-sarawak-as-haze-from-indonesia-worsens"
+    }
+  ]
+}

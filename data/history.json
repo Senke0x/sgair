@@ -1,0 +1,504 @@
+{
+ "psi": [
+  {
+   "date": "2026-09-01",
+   "max": 76,
+   "psi": {
+    "north": 62,
+    "south": 62,
+    "east": 66,
+    "west": 68,
+    "central": 76
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-02",
+   "max": 77,
+   "psi": {
+    "north": 62,
+    "south": 65,
+    "east": 68,
+    "west": 69,
+    "central": 77
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-03",
+   "max": 88,
+   "psi": {
+    "north": 69,
+    "south": 72,
+    "east": 76,
+    "west": 80,
+    "central": 88
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-04",
+   "max": 123,
+   "psi": {
+    "north": 88,
+    "south": 87,
+    "east": 104,
+    "west": 99,
+    "central": 123
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-05",
+   "max": 123,
+   "psi": {
+    "north": 87,
+    "south": 88,
+    "east": 104,
+    "west": 103,
+    "central": 123
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-06",
+   "max": 93,
+   "psi": {
+    "north": 75,
+    "south": 79,
+    "east": 91,
+    "west": 86,
+    "central": 93
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-07",
+   "max": 98,
+   "psi": {
+    "north": 74,
+    "south": 81,
+    "east": 93,
+    "west": 90,
+    "central": 98
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-08",
+   "max": 83,
+   "psi": {
+    "north": 66,
+    "south": 69,
+    "east": 75,
+    "west": 76,
+    "central": 83
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-09",
+   "max": 102,
+   "psi": {
+    "north": 76,
+    "south": 81,
+    "east": 83,
+    "west": 87,
+    "central": 102
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-10",
+   "max": 106,
+   "psi": {
+    "north": 77,
+    "south": 80,
+    "east": 87,
+    "west": 87,
+    "central": 106
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-11",
+   "max": 99,
+   "psi": {
+    "north": 76,
+    "south": 77,
+    "east": 86,
+    "west": 85,
+    "central": 99
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-12",
+   "max": 82,
+   "psi": {
+    "north": 70,
+    "south": 72,
+    "east": 80,
+    "west": 79,
+    "central": 82
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-13",
+   "max": 84,
+   "psi": {
+    "north": 69,
+    "south": 71,
+    "east": 80,
+    "west": 75,
+    "central": 84
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-14",
+   "max": 141,
+   "psi": {
+    "north": 97,
+    "south": 106,
+    "east": 121,
+    "west": 117,
+    "central": 141
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-15",
+   "max": 154,
+   "psi": {
+    "north": 104,
+    "south": 111,
+    "east": 128,
+    "west": 128,
+    "central": 154
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-16",
+   "max": 112,
+   "psi": {
+    "north": 83,
+    "south": 80,
+    "east": 93,
+    "west": 96,
+    "central": 112
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-17",
+   "max": 103,
+   "psi": {
+    "north": 75,
+    "south": 70,
+    "east": 81,
+    "west": 95,
+    "central": 103
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-18",
+   "max": 102,
+   "psi": {
+    "north": 74,
+    "south": 70,
+    "east": 80,
+    "west": 93,
+    "central": 102
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-19",
+   "max": 113,
+   "psi": {
+    "north": 84,
+    "south": 82,
+    "east": 97,
+    "west": 96,
+    "central": 113
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-20",
+   "max": 123,
+   "psi": {
+    "north": 85,
+    "south": 89,
+    "east": 102,
+    "west": 106,
+    "central": 123
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-21",
+   "max": 93,
+   "psi": {
+    "north": 68,
+    "south": 70,
+    "east": 73,
+    "west": 90,
+    "central": 93
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-22",
+   "max": 84,
+   "psi": {
+    "north": 65,
+    "south": 69,
+    "east": 74,
+    "west": 77,
+    "central": 84
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-23",
+   "max": 73,
+   "psi": {
+    "north": 62,
+    "south": 62,
+    "east": 70,
+    "west": 73,
+    "central": 67
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-24",
+   "max": 84,
+   "psi": {
+    "north": 68,
+    "south": 69,
+    "east": 79,
+    "west": 84,
+    "central": 78
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-25",
+   "max": 81,
+   "psi": {
+    "north": 64,
+    "south": 63,
+    "east": 72,
+    "west": 77,
+    "central": 81
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-26",
+   "max": 115,
+   "psi": {
+    "north": 80,
+    "south": 84,
+    "east": 99,
+    "west": 97,
+    "central": 115
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-27",
+   "max": 132,
+   "psi": {
+    "north": 92,
+    "south": 97,
+    "east": 119,
+    "west": 106,
+    "central": 132
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-28",
+   "max": 117,
+   "psi": {
+    "north": 79,
+    "south": 111,
+    "east": 98,
+    "west": 107,
+    "central": 117
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-29",
+   "max": 167,
+   "psi": {
+    "north": 109,
+    "south": 133,
+    "east": 139,
+    "west": 150,
+    "central": 167
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-09-30",
+   "max": 138,
+   "psi": {
+    "north": 104,
+    "south": 112,
+    "east": 128,
+    "west": 135,
+    "central": 138
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-01",
+   "max": 96,
+   "psi": {
+    "north": 79,
+    "south": 89,
+    "east": 95,
+    "west": 96,
+    "central": 96
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-02",
+   "max": 91,
+   "psi": {
+    "north": 71,
+    "south": 77,
+    "east": 80,
+    "west": 80,
+    "central": 91
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-03",
+   "max": 105,
+   "psi": {
+    "north": 79,
+    "south": 87,
+    "east": 96,
+    "west": 94,
+    "central": 105
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-04",
+   "max": 103,
+   "psi": {
+    "north": 79,
+    "south": 83,
+    "east": 94,
+    "west": 89,
+    "central": 103
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-05",
+   "max": 134,
+   "psi": {
+    "north": 106,
+    "south": 104,
+    "east": 112,
+    "west": 127,
+    "central": 134
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-06",
+   "max": 136,
+   "psi": {
+    "north": 111,
+    "south": 103,
+    "east": 119,
+    "west": 125,
+    "central": 136
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-07",
+   "max": 150,
+   "psi": {
+    "north": 109,
+    "south": 120,
+    "east": 132,
+    "west": 150,
+    "central": 144
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-08",
+   "max": 162,
+   "psi": {
+    "north": 114,
+    "south": 124,
+    "east": 133,
+    "west": 162,
+    "central": 148
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-09",
+   "max": 192,
+   "psi": {
+    "north": 136,
+    "south": 168,
+    "east": 170,
+    "west": 187,
+    "central": 192
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-10",
+   "max": 183,
+   "psi": {
+    "north": 133,
+    "south": 155,
+    "east": 162,
+    "west": 178,
+    "central": 183
+   },
+   "hours": 24
+  },
+  {
+   "date": "2026-10-11",
+   "max": 162,
+   "psi": {
+    "north": 120,
+    "south": 123,
+    "east": 144,
+    "west": 155,
+    "central": 162
+   },
+   "hours": 24
+  }
+ ],
+ "hotspots": [
+  {
+   "date": "2026-10-11",
+   "total": 717,
+   "sumatra": 49,
+   "kalimantan": 382
+  }
+ ]
+}
