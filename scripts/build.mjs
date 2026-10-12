@@ -17,6 +17,7 @@ const NAME = "SG Air Quality";
 // sgairquality.com by HTTP-referrer restrictions in Google Cloud Console.
 const GMAPS_KEY = process.env.GMAPS_KEY || "AIzaSyC16BH7J7sfEKqHBwwlmG35KKH6g8YANxQ";
 const ACTIONBOOK = "https://actionbook.app/?utm_source=sgairquality.com&utm_medium=referral&utm_campaign=footer";
+const CLAUDE = "https://claude.ai/";
 
 const readJSON = (p, fb) => (existsSync(join(ROOT, p)) ? JSON.parse(readFileSync(join(ROOT, p), "utf8")) : fb);
 const curated = readJSON("data/updates.json", { background: [], news: [] });
@@ -112,9 +113,8 @@ function footer() {
     </div>
   </div>
   <div class="credits">
-    <span>Coding by Claude</span>
+    <span>Coding by <a href="${CLAUDE}" rel="noopener" target="_blank">Claude</a></span>
     <span>Data collect by <a href="${ACTIONBOOK}" rel="noopener" target="_blank">Actionbook</a></span>
-    <a class="ab-cta" href="${ACTIONBOOK}" rel="noopener" target="_blank">Try Actionbook, the AI browser agent</a>
   </div>
 </footer>`;
 }
