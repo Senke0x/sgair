@@ -1,0 +1,14 @@
+{
+  "name": "SG Air Quality",
+  "short_name": "SG PSI",
+  "description": "Live Singapore PSI, PM2.5 and haze forecast",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f4f5",
+  "theme_color": "#2b3a4a",
+  "icons": [
+    { "src": "/assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
