@@ -16,7 +16,7 @@ const NAME = "SG Air Quality";
 // Browser key for the Maps JavaScript API. It is public by design; it is locked to
 // sgairquality.com by HTTP-referrer restrictions in Google Cloud Console.
 const GMAPS_KEY = process.env.GMAPS_KEY || "REMOVED_GOOGLE_MAPS_KEY";
-const ACTIONBOOK = "https://actionbook.app/?utm_source=sgairquality.com&utm_medium=referral&utm_campaign=footer";
+const ACTIONBOOK = "https://singapore-haze-air-quality-ndbd1pzo.actionbook.page/";
 const CLAUDE = "https://claude.ai/";
 
 const readJSON = (p, fb) => (existsSync(join(ROOT, p)) ? JSON.parse(readFileSync(join(ROOT, p), "utf8")) : fb);
