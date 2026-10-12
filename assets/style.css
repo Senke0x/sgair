@@ -129,13 +129,8 @@ small { font-weight: 400; color: var(--muted); }
 }
 body[data-band="unhealthy"] .psi-band { color: #241b00; }
 .advice { max-width: 46ch; font-size: 1.08rem; }
-.stamp { font-size: .92rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.refresh {
-  font: inherit; font-size: .88rem; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-  background: transparent; color: inherit; border: 1.5px solid currentColor;
-}
-.refresh:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
-.refresh[disabled] { opacity: .5; cursor: wait; }
+.stamp { font-size: .92rem; display: flex; gap: 6px 10px; align-items: center; flex-wrap: wrap; }
+.stamp #psi-time { flex-basis: 100%; order: 2; }
 
 /* region compass: N on top, W–C–E across, S below */
 .compass {
@@ -206,13 +201,14 @@ tbody tr:last-child > * { border-bottom: 0; }
 .chart figcaption { font-size: .85rem; color: var(--muted); padding: 6px 6px 0; }
 
 /* forecast days */
-.days { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
-.day { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; border-left: 6px solid var(--db, var(--line)); }
+.days { list-style: none; margin: 0 0 10px; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.day { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 10px 12px 12px; border-left: 5px solid var(--db, var(--line)); display: flex; flex-direction: column; min-width: 0; }
 .day[data-band="good"] { --db: var(--good); } .day[data-band="moderate"] { --db: var(--moderate); }
 .day[data-band="unhealthy"] { --db: var(--unhealthy); } .day[data-band="very"] { --db: var(--very); } .day[data-band="hazardous"] { --db: var(--hazardous); }
-.day-name { font-weight: 650; display: block; }
+.day-name { font-weight: 650; white-space: nowrap; font-size: .95rem; font-variation-settings: "wdth" 88; }
 .day-psi { font-size: 2.2rem; line-height: 1.05; font-weight: 800; font-variation-settings: "wdth" 70; display: block; font-variant-numeric: tabular-nums; }
-.day-band { font-size: .88rem; color: var(--muted); }
+.day-band { font-size: .88rem; color: var(--ink); white-space: nowrap; }
+.day-range { font-size: .78rem; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .outlook { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
 .outlook-range { font-size: 1.35rem; font-weight: 700; font-variation-settings: "wdth" 85; margin-bottom: .35em; }
@@ -287,6 +283,7 @@ tbody tr:last-child > * { border-bottom: 0; }
   .foot-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
+  .days { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .home .site-head { position: relative; }
   .hero { padding-top: 8px; min-height: 0; }
   .site-head nav { gap: 2px 14px; }
@@ -345,3 +342,8 @@ tbody tr:last-child > * { border-bottom: 0; }
 @media (max-width: 900px) {
   .hl-cols { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
+
+/* live badge */
+.live { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: .85rem; padding: 3px 10px 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--ink); }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #d23c2a; box-shadow: 0 0 0 0 rgba(210, 60, 42, .55); animation: live-pulse 2s ease-out infinite; }
+@keyframes live-pulse { 0% { box-shadow: 0 0 0 0 rgba(210, 60, 42, .55); } 70% { box-shadow: 0 0 0 8px rgba(210, 60, 42, 0); } 100% { box-shadow: 0 0 0 0 rgba(210, 60, 42, 0); } }

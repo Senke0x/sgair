@@ -206,6 +206,21 @@ function outlookBlock() {
 </div>`;
 }
 
+const DIRS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+function windBlock() {
+  const g = live.weather;
+  if (!g || !g.wind) return `<h3>Wind for the next 24 hours</h3><p class="muted">Loading the NEA weather forecast…</p>`;
+  const dir = String(g.wind.direction || "").toUpperCase();
+  const i = DIRS.indexOf(dir);
+  const from = i >= 0 ? i * 22.5 : null;
+  const southerly = from != null && from >= 101.25 && from <= 258.75;
+  const sp = g.wind.speed || {};
+  const arrow = from == null ? "" : `<svg class="wind-arrow" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25"/><g transform="rotate(${from + 180} 27 27)"><path d="M27 7l9 16h-6v20h-6V23h-6z"/></g></svg>`;
+  return `<h3>Wind for the next 24 hours</h3>
+      <div class="wind-row">${arrow}<p><strong>${esc(dir || "Variable")}</strong> winds, ${sp.low ?? "?"}–${sp.high ?? "?"} km/h. ${g.forecast?.text ? `${esc(g.forecast.text)}.` : ""}</p></div>
+      <p class="meta">${southerly ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore." : from != null ? "Winds from this direction are less likely to bring smoke from the Indonesian fires." : ""} NEA forecast for ${esc(g.validPeriod?.text || "the next 24 hours")}.</p>`;
+}
+
 function mapBlock(view = "region") {
   const hs = live.hotspots;
   return `<div class="map-wrap">
@@ -370,7 +385,7 @@ function home() {
         <span class="psi-band" id="psi-band">${snap ? snap.band.label : "Loading NEA readings"}</span>
       </div>
       <p class="advice" id="psi-advice">${snap ? ADVICE[snap.band.key] : "Readings load from the National Environment Agency every 30 minutes."}</p>
-      <p class="stamp"><span id="psi-time">${snap ? `${snap.hot.join(" and ")} highest. Island range ${snap.min}–${snap.max}. NEA reading for ${fmtDT(now.timestamp)}.` : "Waiting for data"}</span> <button type="button" id="refresh" class="refresh">Refresh now</button> <span id="next-refresh" class="muted"></span></p>
+      <p class="stamp"><span class="live" title="Readings update automatically every 30 minutes"><span class="live-dot" aria-hidden="true"></span>Live</span> <span id="psi-time">${snap ? `${snap.hot.join(" and ")} highest. Island range ${snap.min}–${snap.max}. NEA reading for ${fmtDT(now.timestamp)}.` : "Waiting for data"}</span> <span id="last-refresh" class="muted">Last refreshed ${fmtDT(GENERATED)}</span></p>
     </div>
     <div class="compass" id="regions" aria-label="24-hour PSI by region">
       ${REGIONS.map(regionTile).join("")}
@@ -405,10 +420,7 @@ function home() {
     </div>
     <ol class="days" id="forecast-days"><li class="muted">Loading forecast…</li></ol>
     <p class="meta" id="forecast-note"></p>
-    <div class="wind" id="wind">
-      <h3>Wind for the next 24 hours</h3>
-      <p class="muted">Loading the NEA weather forecast…</p>
-    </div>
+    <div class="wind" id="wind">${windBlock()}</div>
   </div>
   <div>
     <div class="block-head"><h2>NEA's official outlook</h2></div>

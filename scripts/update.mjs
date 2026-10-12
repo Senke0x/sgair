@@ -163,7 +163,9 @@ async function headlines() {
 
 // ---------- PSI snapshot ----------
 async function psiNow() {
-  const [psi, pm] = await Promise.all([get(`${DGS}/psi`), get(`${DGS}/pm25`)]);
+  const psi = await get(`${DGS}/psi`);
+  await sleep(600);
+  const pm = await get(`${DGS}/pm25`);
   const p = psi.data.items.at(-1), q = pm.data.items.at(-1);
   return {
     timestamp: p.timestamp,
@@ -238,11 +240,19 @@ async function previous() {
 
 const prev = await previous();
 const live = { generatedAt: new Date().toISOString(), sources: {} };
+async function weatherNow() {
+  const j = await get(`${DGS}/twenty-four-hr-forecast`);
+  const g = j.data && j.data.records && j.data.records[0] && j.data.records[0].general;
+  if (!g) throw new Error("no forecast record");
+  return g; // { forecast, wind: { direction, speed }, validPeriod, temperature, relativeHumidity }
+}
+
 const tasks = {
   advisory: neaAdvisory,
   kml: neaKml,
   headlines,
   now: psiNow,
+  weather: weatherNow,
 };
 for (const [k, fn] of Object.entries(tasks)) {
   try {

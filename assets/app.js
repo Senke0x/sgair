@@ -70,19 +70,32 @@
   }
   const fmtTime = (d) =>
     d.toLocaleString("en-SG", { timeZone: SGT, hour: "numeric", minute: "2-digit", day: "numeric", month: "short" });
-  const fmtDay = (d) => d.toLocaleDateString("en-SG", { timeZone: SGT, weekday: "short", day: "numeric", month: "short" });
+  const fmtDay = (d) => {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-SG", { timeZone: SGT, weekday: "short", day: "numeric", month: "short" }).formatToParts(d).map((p) => [p.type, p.value])
+    );
+    return `${parts.weekday} ${parts.day} ${parts.month}`;
+  };
+  const fmtClock = (d) => d.toLocaleTimeString("en-SG", { timeZone: SGT, hour: "numeric", minute: "2-digit" });
   const sgYmd = (d) => new Date(d.getTime() + 8 * 3600e3).toISOString().slice(0, 10);
 
   // ---------- fetching ----------
-  async function getJSON(url) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
-    try {
-      const r = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" } });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return await r.json();
-    } finally {
-      clearTimeout(t);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // data.gov.sg rate-limits anonymous callers, so back off and retry on 429 / 5xx.
+  async function getJSON(url, tries = 3) {
+    for (let i = 0; i < tries; i++) {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 15000);
+      try {
+        const r = await fetch(url, { signal: ctrl.signal, headers: { Accept: "application/json" } });
+        if (r.ok) return await r.json();
+        if (!(r.status === 429 || r.status >= 500) || i === tries - 1) throw new Error(`HTTP ${r.status}`);
+      } catch (e) {
+        if (i === tries - 1) throw e;
+      } finally {
+        clearTimeout(t);
+      }
+      await wait(1500 * (i + 1) + Math.random() * 500);
     }
   }
 
@@ -267,11 +280,12 @@
       .map(([k, vals]) => {
         const hi = Math.max(...vals), lo = Math.min(...vals);
         const b = bandOf(hi);
-        const name = k === today ? "Rest of today" : fmtDay(new Date(k + "T12:00:00+08:00"));
+        const name = k === today ? "Today" : fmtDay(new Date(k + "T12:00:00+08:00"));
         return `<li class="day" data-band="${b.key}">
           <span class="day-name">${name}</span>
           <span class="day-psi">${hi}</span>
-          <span class="day-band">${b.label}, range ${lo}–${hi}</span>
+          <span class="day-band">${b.label}</span>
+          <span class="day-range">Range ${lo}–${hi}</span>
         </li>`;
       })
       .join("");
@@ -358,7 +372,7 @@
   function renderWind(j) {
     const box = $("#wind");
     const rec = j && j.data && j.data.records && j.data.records[0];
-    const g = rec && rec.general;
+    const g = (rec && rec.general) || (j && j.wind ? j : null);
     if (!g || !g.wind) {
       box.innerHTML = `<h3>Wind for the next 24 hours</h3><p class="muted">The NEA weather forecast is unavailable right now.</p>`;
       return;
@@ -384,18 +398,19 @@
   }
 
   // ---------- main loop ----------
+  const settle = (p) => p.then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }));
+
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
-    const btn = $("#refresh");
-    if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
 
-    const [psiRes, pmRes, windRes, omRes] = await Promise.allSettled([
-      loadPsi(),
-      fetchItems("pm25"),
-      getJSON(`${API}/twenty-four-hr-forecast`),
-      getJSON(OM),
-    ]);
+    // Open-Meteo is a different host, so it can run alongside.
+    const omP = settle(getJSON(OM));
+    // data.gov.sg calls go one after another to stay under the anonymous rate limit.
+    const psiRes = await settle(loadPsi());
+    const pmRes = await settle(fetchItems("pm25"));
+    const windRes = await settle(getJSON(`${API}/twenty-four-hr-forecast`));
+    const omRes = await omP;
 
     let latest = null, series = [];
     if (psiRes.status === "fulfilled" && psiRes.value.latest) {
@@ -410,31 +425,29 @@
     const fc = omRes.status === "fulfilled" ? buildForecast(omRes.value, latest) : null;
     renderForecastDays(fc);
     renderChart(series, fc);
-    renderWind(windRes.status === "fulfilled" ? windRes.value : null);
+
+    if (windRes.status === "fulfilled" && windRes.value?.data?.records?.length) {
+      renderWind(windRes.value);
+    } else if (window.sgaqLive) {
+      // fall back to the copy the site's scheduled job saved in /data/live.json
+      window.sgaqLive.get().then((j) => renderWind(j && j.weather ? j.weather : null));
+    } else {
+      renderWind(null);
+    }
 
     state.lastLoad = Date.now();
     state.loading = false;
-    if (btn) { btn.disabled = false; btn.textContent = "Refresh now"; }
-    tick();
-  }
-
-  function tick() {
-    const el = $("#next-refresh");
-    if (!el || !state.lastLoad) return;
-    const mins = Math.max(0, Math.ceil((state.lastLoad + REFRESH_MS - Date.now()) / 60000));
-    el.textContent = `Next check in ${mins} min`;
+    const stamp = $("#last-refresh");
+    if (stamp) stamp.textContent = `Last refreshed ${fmtClock(new Date(state.lastLoad))}`;
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     refresh();
     setInterval(() => {
       if (Date.now() - state.lastLoad >= REFRESH_MS) refresh();
-      else tick();
     }, 60 * 1000);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && Date.now() - state.lastLoad >= REFRESH_MS) refresh();
     });
-    const btn = $("#refresh");
-    if (btn) btn.addEventListener("click", refresh);
   });
 })();
