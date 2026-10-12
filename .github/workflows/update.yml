@@ -2,7 +2,7 @@ name: Refresh data and deploy
 
 on:
   schedule:
-    # every 30 minutes (UTC). Offset from :00/:30 because GitHub delays jobs at the top of the hour.
+    # every 30 minutes (UTC), offset from :00 and :30, which GitHub delays the most
     - cron: "7,37 * * * *"
   push:
     branches: [main]
@@ -25,9 +25,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
