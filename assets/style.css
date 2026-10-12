@@ -339,11 +339,9 @@ tbody tr:last-child > * { border-bottom: 0; }
 .season figcaption { font-size: .92rem; color: var(--muted); padding: 8px 6px 0; max-width: 80ch; }
 .season figcaption strong { color: var(--ink); }
 
-.credits a { color: inherit; }
-.ab-cta { margin-left: auto; font-weight: 600; padding: 6px 14px; border: 1.5px solid currentColor; border-radius: 999px; text-decoration: none; font-size: .92rem; }
-.ab-cta:hover { background: var(--ink); color: var(--panel) !important; border-color: var(--ink); }
+.credits a { color: inherit; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.credits a:hover { text-decoration-color: currentColor; }
 
 @media (max-width: 900px) {
   .hl-cols { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .ab-cta { margin-left: 0; }
 }
