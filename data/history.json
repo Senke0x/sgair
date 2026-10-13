@@ -503,6 +503,18 @@
     "central": 159
    },
    "hours": 24
+  },
+  {
+   "date": "2026-10-13",
+   "max": 174,
+   "psi": {
+    "north": 129,
+    "south": 134,
+    "east": 156,
+    "west": 174,
+    "central": 170
+   },
+   "hours": 23
   }
  ],
  "hotspots": [
