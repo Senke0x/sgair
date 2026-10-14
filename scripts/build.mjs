@@ -323,16 +323,21 @@ function compareSvg(kind, n) {
     rows.forEach((r, i) => { const v = r[key]; if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`; pen = true; });
     return d;
   };
-  const colW = (W - L - R) / Math.max(1, n - 1);
+  // hover data: one empty <g class="pt"> per day, read by the tooltip in app.js
+  const unit = kind === "psi" ? "24-hr PSI" : "24-hr PM2.5 µg/m³";
   const hits = rows
-    .map((r, i) => `<rect x="${(X(i) - colW / 2).toFixed(1)}" y="${T}" width="${colW.toFixed(1)}" height="${H - T - B}"><title>${fmtDate(r.d).replace(/ \d{4}$/, "")}: ${r.d.slice(0, 4)} ${r.va ?? "no data"}, ${r.p.slice(0, 4)} ${r.vb ?? "no data"}</title></rect>`)
+    .map((r, i) => {
+      const ys = [r.va != null ? `${Y(r.va).toFixed(1)}~c-this` : "", r.vb != null ? `${Y(r.vb).toFixed(1)}~c-last` : ""].filter(Boolean).join("|");
+      const ls = `c-this~${r.d.slice(0, 4)}~${r.va ?? "no data"}|c-last~${r.p.slice(0, 4)}~${r.vb ?? "no data"}`;
+      return `<g class="pt" data-x="${X(i).toFixed(1)}" data-y="${ys}" data-t="${fmtDate(r.d).replace(/ \d{4}$/, "")} · ${unit}" data-l="${ls}"></g>`;
+    })
     .join("");
   const label = `${kind === "psi" ? "Daily peak 24-hour PSI" : "Daily peak 24-hour PM2.5"}, ${n <= 31 ? "past 30 days" : "past 12 months"}, this year compared with the same dates last year.`;
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
     <g class="grid">${grid}</g><g class="axis">${axis}</g>
     <line class="limit" x1="${L}" x2="${W - R}" y1="${Y(ref.v).toFixed(1)}" y2="${Y(ref.v).toFixed(1)}"/><text class="limit-t" x="${L + 4}" y="${(Y(ref.v) + 13).toFixed(1)}">${ref.t}</text>
     <path class="ln-last" d="${path("vb")}"/><path class="ln-this" d="${path("va")}"/>
-    <g class="hit">${hits}</g>
+    <rect class="hit-area" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}"/>${hits}
   </svg>`;
 }
 function compareBlock() {
@@ -355,7 +360,7 @@ function compareBlock() {
   </div>
   ${view(30, false)}
   ${yearReady ? view(365, true) : ""}
-  <p class="meta">Each point is the day's highest regional 24-hour reading from NEA, up to ${fmtDate(month.end)}. Hover or tap a day to see both years.${yearReady && known < 365 ? ` <span data-range-note="365" hidden>Older days are being added a few at a time to keep the load on NEA's servers light: ${known} of 365 days so far.</span>` : ""}</p>`;
+  <p class="meta">Each point is the day's highest regional 24-hour reading from NEA, up to ${fmtDate(month.end)}. Hover or tap the chart to see both years for any day.${yearReady && known < 365 ? ` <span data-range-note="365" hidden>Older days are being added a few at a time to keep the load on NEA's servers light: ${known} of 365 days so far.</span>` : ""}</p>`;
 }
 
 function hotspotTrend() {

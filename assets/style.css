@@ -357,8 +357,6 @@ tbody tr:last-child > * { border-bottom: 0; }
 .trend-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
 .trend-panel h3 { font-size: 1rem; margin-bottom: 8px; }
 .trend-panel .meta { margin: 8px 2px 0; }
-.chart .hit circle { fill: transparent; }
-.chart .hit circle:hover { fill: var(--ink); fill-opacity: .25; }
 .chart circle.last { stroke: var(--panel); stroke-width: 2; }
 .chart circle.band-good { fill: var(--good); } .chart circle.band-moderate { fill: var(--moderate); }
 .chart circle.band-unhealthy { fill: var(--unhealthy); } .chart circle.band-very { fill: var(--very); } .chart circle.band-hazardous { fill: var(--hazardous); }
@@ -381,8 +379,6 @@ tbody tr:last-child > * { border-bottom: 0; }
 .cmp-chart .ln-last { stroke: var(--c-last); }
 .cmp-chart .limit { stroke: var(--muted); stroke-dasharray: 4 4; opacity: .7; }
 .cmp-chart .limit-t { fill: var(--muted); font-size: 11px; font-family: var(--font); }
-.cmp-chart .hit rect { fill: transparent; }
-.cmp-chart .hit rect:hover { fill: var(--ink); fill-opacity: .06; }
 [data-range-view="365"] .ln-this, [data-range-view="365"] .ln-last { stroke-width: 1.8; }
 
 @media (max-width: 900px) {
@@ -391,3 +387,30 @@ tbody tr:last-child > * { border-bottom: 0; }
 @media (max-width: 560px) {
   .chart .axis text,   .chart .bands text { font-size: 15px; }
   }
+
+/* chart tooltips */
+.chart { position: relative; }
+.chart svg { touch-action: pan-y; }
+.chart .hit-area { fill: transparent; cursor: crosshair; }
+.chart .hover line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.chart .hover circle { stroke: var(--panel); stroke-width: 2.5; pointer-events: none; }
+.chart .hover circle.c-this { fill: var(--c-this); } .chart .hover circle.c-last { fill: var(--c-last); }
+.chart .hover circle.band-good { fill: var(--good); } .chart .hover circle.band-moderate { fill: var(--moderate); }
+.chart .hover circle.band-unhealthy { fill: var(--unhealthy); } .chart .hover circle.band-very { fill: var(--very); }
+.chart .hover circle.band-hazardous { fill: var(--hazardous); }
+.chart-tip {
+  position: absolute; z-index: 5; pointer-events: none; min-width: 9.5em; max-width: 16em;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .14); padding: 8px 11px; font-size: .86rem; line-height: 1.35;
+}
+.chart-tip[hidden] { display: none; }
+.chart-tip p { margin: 0; white-space: nowrap; }
+.chart-tip .tip-t { color: var(--muted); font-size: .8rem; margin-bottom: 4px; }
+.chart-tip .tip-l + .tip-l { margin-top: 2px; }
+.chart-tip strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.chart-tip .tip-n { color: var(--muted); font-size: .8rem; }
+.chart-tip .sw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 0; background: var(--muted); }
+.chart-tip .sw.c-this { background: var(--c-this); } .chart-tip .sw.c-last { background: var(--c-last); }
+.chart-tip .sw.band-good { background: var(--good); } .chart-tip .sw.band-moderate { background: var(--moderate); }
+.chart-tip .sw.band-unhealthy { background: var(--unhealthy); } .chart-tip .sw.band-very { background: var(--very); }
+.chart-tip .sw.band-hazardous { background: var(--hazardous); }

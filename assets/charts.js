@@ -77,9 +77,11 @@
       axis += '<text x="' + X(t).toFixed(1) + '" y="' + (H - 9) + '" text-anchor="middle">' + lbl + "</text>";
     }
     var d = pts.map(function (q, k) { return (k ? "L" : "M") + X(q.t).toFixed(1) + " " + Y(q.v).toFixed(1); }).join(" ");
+    // hover data: one empty <g class="pt"> per reading, read by the tooltip in app.js
     var dots = pts.map(function (q) {
-      var s = sgParts(q.t);
-      return '<circle cx="' + X(q.t).toFixed(1) + '" cy="' + Y(q.v).toFixed(1) + '" r="5"><title>' + hourLabel(s.h) + ", " + s.day + " " + s.mon + ": " + q.v + "</title></circle>";
+      var s = sgParts(q.t), b = bandOf(kind, q.v);
+      return '<g class="pt" data-x="' + X(q.t).toFixed(1) + '" data-y="' + Y(q.v).toFixed(1) + "~band-" + b[1] +
+        '" data-t="' + hourLabel(s.h) + ", " + s.day + " " + s.mon + '" data-l="band-' + b[1] + "~" + S.unit + "~" + q.v + "~" + b[2] + '"></g>';
     }).join("");
     var last = pts[pts.length - 1];
     var hiPt = pts.reduce(function (a, b) { return b.v > a.v ? b : a; });
@@ -91,7 +93,7 @@
       '<g class="bands">' + bands + '</g><g class="grid">' + grid + '</g><g class="axis">' + axis + "</g>" +
       '<path class="obs" d="' + d + '"/>' +
       '<circle class="last band-' + lb[1] + '" cx="' + X(last.t).toFixed(1) + '" cy="' + Y(last.v).toFixed(1) + '" r="5"/>' +
-      '<g class="hit">' + dots + "</g></svg>" +
+      '<rect class="hit-area" x="' + L + '" y="' + T + '" width="' + (W - L - R) + '" height="' + (H - T - B) + '"/>' + dots + "</svg>" +
       '<figcaption><strong>' + last.v + "</strong> now (" + lb[2] + "). 24-hour high " + hiPt.v + ", low " + loPt.v + ". " + who + ", Singapore time.</figcaption>";
   }
 
