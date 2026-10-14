@@ -34,19 +34,19 @@ jobs:
       - name: Fetch latest NEA data, hotspots and headlines
         run: node scripts/update.mjs
 
-      - name: Last year for the comparison (no requests once complete)
-        run: node scripts/years.mjs
+      - name: Daily PSI and PM2.5 for this year vs last year (at most 12 NEA calls, then 1 a day)
+        run: node scripts/daily.mjs
 
       - name: Build site
         run: node scripts/build.mjs
 
       - name: Save daily history (about one commit a day)
         run: |
-          if ! git diff --quiet -- data/history.json data/lastyear.json; then
+          if ! git diff --quiet -- data/history.json data/daily.json; then
             git config user.name "sgairquality-bot"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add data/history.json data/lastyear.json
-            git commit -m "data: daily PSI and hotspot history"
+            git add data/history.json data/daily.json
+            git commit -m "data: daily PSI, PM2.5 and hotspot history"
             git pull --rebase --autostash && git push
           fi
 

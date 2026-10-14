@@ -5,11 +5,10 @@
 // Sources
 //   NEA haze situation update  https://www.nea.gov.sg/api/advisory/latesthazesituationupdate/
 //   NEA hotspots + haze areas  KML files linked from https://www.haze.gov.sg/
-//   NEA PSI / PM2.5 readings   https://api-open.data.gov.sg/v2/real-time/api/{psi,pm25}
+//   NEA PSI / PM2.5 readings   https://api-open.data.gov.sg/v2/real-time/api/{psi,pm25} (today only)
 //   Headlines                  Google News RSS (title, publisher, time, link only)
 //
 // Usage: node scripts/update.mjs            normal run
-//        node scripts/update.mjs --backfill  also fill daily PSI history back to SEASON_START
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -19,11 +18,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const LIVE = join(ROOT, "data/live.json");
 const HISTORY = join(ROOT, "data/history.json");
 const SITE = "https://sgairquality.com";
-const SEASON_START = "2026-09-01";
 const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128 Safari/537.36";
 const DGS = "https://api-open.data.gov.sg/v2/real-time/api";
 const REGIONS = ["north", "south", "east", "west", "central"];
-const BACKFILL = process.argv.includes("--backfill");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sgDate = (offset = 0) => new Date(Date.now() + 8 * 3600e3 + offset * 864e5).toISOString().slice(0, 10);
@@ -220,45 +217,11 @@ async function readings(prev) {
 }
 
 // ---------- daily history ----------
-async function dayMax(date) {
-  const items = [];
-  let token = null;
-  for (let i = 0; i < 6; i++) {
-    const qs = new URLSearchParams({ date });
-    if (token) qs.set("paginationToken", token);
-    const j = await get(`${DGS}/psi?${qs}`);
-    items.push(...(j.data.items || []));
-    token = j.data.paginationToken;
-    if (!token) break;
-  }
-  if (!items.length) return null;
-  const psi = {};
-  for (const r of REGIONS) psi[r] = Math.max(...items.map((it) => it.readings.psi_twenty_four_hourly[r] ?? 0));
-  return { date, max: Math.max(...Object.values(psi)), psi, hours: items.length };
-}
-
 async function updateHistory(live) {
-  const hist = existsSync(HISTORY) ? JSON.parse(readFileSync(HISTORY, "utf8")) : { psi: [], hotspots: [] };
-  hist.psi ||= []; hist.hotspots ||= [];
-  const have = new Set(hist.psi.map((d) => d.date));
-  const yday = sgDate(-1);
-  const want = [];
-  if (BACKFILL) {
-    for (let d = new Date(SEASON_START + "T12:00:00Z"); d.toISOString().slice(0, 10) <= yday; d = new Date(d.getTime() + 864e5)) {
-      const k = d.toISOString().slice(0, 10);
-      if (!have.has(k)) want.push(k);
-    }
-  } else if (!have.has(yday)) want.push(yday);
-  for (const date of want) {
-    try {
-      const row = await dayMax(date);
-      if (row) hist.psi.push(row);
-      log("history", date, row?.max);
-    } catch (e) { log("history", date, e.message); }
-    await sleep(1200);
-  }
-  hist.psi.sort((a, b) => (a.date < b.date ? -1 : 1));
-
+  // daily NEA hotspot totals. Daily PSI and PM2.5 now live in data/daily.json (scripts/daily.mjs).
+  const hist = existsSync(HISTORY) ? JSON.parse(readFileSync(HISTORY, "utf8")) : { hotspots: [] };
+  hist.hotspots ||= [];
+  delete hist.psi;
   const hs = live.hotspots;
   if (hs?.asOf) {
     const date = hs.asOf.slice(0, 10);
@@ -268,7 +231,6 @@ async function updateHistory(live) {
       hist.hotspots.sort((a, b) => (a.date < b.date ? -1 : 1));
     }
   }
-  hist.psi = hist.psi.slice(-400);
   hist.hotspots = hist.hotspots.slice(-400);
   return hist;
 }

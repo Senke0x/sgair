@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds sgairquality.com into dist/ from:
 //   data/live.json     auto, every 30 min (scripts/update.mjs)
-//   data/history.json  auto, daily
+//   data/history.json  auto, daily (hotspot totals)
+//   data/daily.json    auto, daily peak PSI and PM2.5 for this year vs last year
 //   data/updates.json  curated background + key events
 // No dependencies. Run: node scripts/build.mjs
 
@@ -24,7 +25,7 @@ const readJSON = (p, fb) => (existsSync(join(ROOT, p)) ? JSON.parse(readFileSync
 const curated = readJSON("data/updates.json", { background: [], news: [] });
 const live = readJSON("data/live.json", {});
 const history = readJSON("data/history.json", { psi: [], hotspots: [] });
-const lastYearData = readJSON("data/lastyear.json", null);
+const dailyData = readJSON("data/daily.json", { days: {} });
 const charts = createRequire(import.meta.url)(join(ROOT, "assets/charts.js"));
 const GENERATED = live.generatedAt || new Date().toISOString();
 const VER = GENERATED.replace(/\D/g, "").slice(0, 12);
@@ -275,64 +276,86 @@ function trendBlock({ only } = {}) {
   <script type="application/json" id="trend-data">${JSON.stringify(t).replace(/</g, "\\u003c")}</script>`;
 }
 
-// ---------- this year vs last year (1 Sep – 31 Oct) ----------
-// This year: data/history.json (collected daily). Last year: data/lastyear.json (fetched once).
-function yearStats() {
-  const ly = lastYearData;
-  const thisYear = +GENERATED.slice(0, 4);
-  const inWin = (d) => d >= "09-01" && d <= "10-31";
-  const cur = (history.psi || []).filter((r) => r.date.startsWith(`${thisYear}-`) && inWin(r.date.slice(5))).map((r) => ({ d: r.date.slice(5), psi: r.max }));
-  const prev = ly && ly.year === thisYear - 1 ? (ly.days || []).filter((r) => r.psi != null && inWin(r.d)) : [];
-  if (cur.length < 3 || prev.length < 10) return null;
-  const cut = cur[cur.length - 1].d;
-  const sum = (rows) => {
-    const peak = rows.reduce((a, b) => (b.psi > a.psi ? b : a));
-    return { peak, over100: rows.filter((r) => r.psi > 100).length, avg: Math.round(rows.reduce((s, r) => s + r.psi, 0) / rows.length), days: rows.length };
-  };
-  return { thisYear, lastYear: thisYear - 1, cut, cur, prev, a: sum(cur), b: sum(prev.filter((r) => r.d <= cut)), bAll: sum(prev) };
+// ---------- this year vs last year: PSI and PM2.5, past month or past year ----------
+// data/daily.json: { days: { "YYYY-MM-DD": [peak 24-hr PSI, peak 24-hr PM2.5] | null } }
+const addDays = (d, n) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+const minusYear = (d) => `${+d.slice(0, 4) - 1}${d.slice(4)}`;
+function compareData(n) {
+  const days = dailyData.days || {};
+  const have = Object.keys(days).filter((d) => days[d]).sort();
+  if (have.length < 2) return null;
+  const end = have[have.length - 1]; // latest complete day
+  const rows = [];
+  for (let k = n - 1; k >= 0; k--) {
+    const d = addDays(end, -k), p = minusYear(d);
+    rows.push({ d, p, a: days[d] || null, b: days[p] || null, known: d in days && p in days });
+  }
+  return { end, rows };
 }
-
-function yearsBlock() {
-  const ys = yearStats();
-  if (!ys) return `<p class="muted">The comparison with last year appears here once enough daily readings are in.</p>`;
-  const { thisYear, lastYear, cut, cur, prev, a, b, bAll } = ys;
-  const cutLabel = fmtDate(`${thisYear}-${cut}`).replace(/ \d{4}$/, "");
-  const W = 900, H = 280, L = 38, R = 46, T = 12, B = 30;
-  const dayIdx = (d) => (Date.parse(`2001-${d}T00:00:00Z`) - Date.parse("2001-09-01T00:00:00Z")) / 864e5;
-  const N = dayIdx("10-31");
-  const yMax = Math.ceil((Math.max(150, a.peak.psi, bAll.peak.psi) + 10) / 50) * 50;
-  const X = (i) => L + (i / N) * (W - L - R);
+function compareSvg(kind, n) {
+  const cd = compareData(n);
+  if (!cd) return "";
+  const idx = kind === "psi" ? 0 : 1;
+  const rows = cd.rows.map((r) => ({ ...r, va: r.a ? r.a[idx] : null, vb: r.b ? r.b[idx] : null }));
+  const vals = rows.flatMap((r) => [r.va, r.vb]).filter((v) => v != null);
+  if (!vals.length) return "";
+  const ref = kind === "psi" ? { v: 100, t: "Unhealthy above 100" } : { v: 55, t: "55 µg/m³, about PSI 100" };
+  const W = 560, H = 250, L = 34, R = 10, T = 14, B = 28;
+  const step0 = kind === "psi" ? 50 : 25;
+  const peak = Math.max(ref.v * 1.3, ...vals);
+  let step = step0; while (peak * 1.1 / step > 7) step *= 2;
+  const yMax = Math.ceil((peak * 1.1) / step) * step;
+  const X = (i) => L + (n === 1 ? 0 : (i / (n - 1)) * (W - L - R));
   const Y = (v) => T + (1 - v / yMax) * (H - T - B);
   let grid = "", axis = "";
-  for (let v = 0; v <= yMax; v += 50) { grid += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`; axis += `<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; }
-  for (const [d, lbl] of [["09-01", "1 Sep"], ["09-15", "15 Sep"], ["10-01", "1 Oct"], ["10-15", "15 Oct"], ["10-31", "31 Oct"]]) {
-    const x = X(dayIdx(d)).toFixed(1);
-    grid += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" opacity=".5"/>`;
-    axis += `<text x="${x}" y="${H - 10}" text-anchor="middle">${lbl}</text>`;
-  }
-  const line = (rows, cls, year) => {
-    const d = rows.map((r, i) => `${i ? "L" : "M"}${X(dayIdx(r.d)).toFixed(1)} ${Y(r.psi).toFixed(1)}`).join(" ");
-    const end = rows[rows.length - 1];
-    const dots = rows.map((r) => `<circle cx="${X(dayIdx(r.d)).toFixed(1)}" cy="${Y(r.psi).toFixed(1)}" r="6"><title>${fmtDate(`${year}-${r.d}`)}: ${r.psi}</title></circle>`).join("");
-    return `<g class="yr ${cls}"><path d="${d}"/><text x="${(X(dayIdx(end.d)) + 6).toFixed(1)}" y="${(Y(end.psi) + 4).toFixed(1)}">${year}</text><g class="hit">${dots}</g></g>`;
+  for (let v = 0; v <= yMax; v += step) { grid += `<line x1="${L}" x2="${W - R}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/>`; axis += `<text x="${L - 5}" y="${(Y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`; }
+  rows.forEach((r, i) => {
+    const day = +r.d.slice(8, 10), mon = MONTHS[+r.d.slice(5, 7) - 1];
+    const tick = n <= 31 ? (n - 1 - i) % 7 === 0 : day === 1;
+    if (!tick) return;
+    const lbl = n <= 31 ? `${day} ${mon}` : r.d.slice(5, 7) === "01" ? `${mon} ${r.d.slice(0, 4)}` : mon;
+    const anchor = X(i) > W - R - 20 ? "end" : X(i) < L + 20 ? "start" : "middle";
+    grid += `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="${T}" y2="${H - B}" opacity=".5"/>`;
+    axis += `<text x="${X(i).toFixed(1)}" y="${H - 9}" text-anchor="${anchor}">${lbl}</text>`;
+  });
+  const path = (key) => {
+    let d = "", pen = false;
+    rows.forEach((r, i) => { const v = r[key]; if (v == null) { pen = false; return; } d += `${pen ? "L" : "M"}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`; pen = true; });
+    return d;
   };
-  const diff = a.over100 - b.over100;
-  const lede = `From 1 Sep to ${cutLabel}, ${thisYear} had <strong>${a.over100} days</strong> with a 24-hour PSI above 100, against ${b.over100} in ${lastYear} by the same date${diff > 0 ? `, ${diff} more` : diff < 0 ? `, ${-diff} fewer` : ""}. This year's peak so far is <strong>${a.peak.psi}</strong> on ${fmtDate(`${thisYear}-${a.peak.d}`).replace(/ \d{4}$/, "")}; last year's whole-season peak was ${bAll.peak.psi}.`;
-  const stat = (k, v1, v2) => `<div class="cmp"><span class="cmp-k">${k}</span><span class="cmp-v"><strong>${v1}</strong> <span class="cmp-y">${thisYear}</span></span><span class="cmp-v cmp-prev">${v2} <span class="cmp-y">${lastYear}</span></span></div>`;
-  return `<p class="lede">${lede}</p>
-  <div class="cmp-row">
-    ${stat(`Days above 100, to ${cutLabel}`, a.over100, b.over100)}
-    ${stat(`Peak 24-hr PSI, to ${cutLabel}`, a.peak.psi, b.peak.psi)}
-    ${stat(`Average daily peak, to ${cutLabel}`, a.avg, b.avg)}
+  const colW = (W - L - R) / Math.max(1, n - 1);
+  const hits = rows
+    .map((r, i) => `<rect x="${(X(i) - colW / 2).toFixed(1)}" y="${T}" width="${colW.toFixed(1)}" height="${H - T - B}"><title>${fmtDate(r.d).replace(/ \d{4}$/, "")}: ${r.d.slice(0, 4)} ${r.va ?? "no data"}, ${r.p.slice(0, 4)} ${r.vb ?? "no data"}</title></rect>`)
+    .join("");
+  const label = `${kind === "psi" ? "Daily peak 24-hour PSI" : "Daily peak 24-hour PM2.5"}, ${n <= 31 ? "past 30 days" : "past 12 months"}, this year compared with the same dates last year.`;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${label}">
+    <g class="grid">${grid}</g><g class="axis">${axis}</g>
+    <line class="limit" x1="${L}" x2="${W - R}" y1="${Y(ref.v).toFixed(1)}" y2="${Y(ref.v).toFixed(1)}"/><text class="limit-t" x="${L + 4}" y="${(Y(ref.v) + 13).toFixed(1)}">${ref.t}</text>
+    <path class="ln-last" d="${path("vb")}"/><path class="ln-this" d="${path("va")}"/>
+    <g class="hit">${hits}</g>
+  </svg>`;
+}
+function compareBlock() {
+  const month = compareData(30);
+  if (!month) return `<p class="muted">The comparison appears here once a month of daily readings has been collected.</p>`;
+  const year = compareData(365);
+  const known = year.rows.filter((r) => r.known).length;
+  const yearReady = known >= 30; // the year view fills in over about a day of scheduled runs
+  const tyLabel = month.end.slice(0, 4), lyLabel = String(+month.end.slice(0, 4) - 1);
+  const view = (n, hidden) => `<div class="cmp-grid" data-range-view="${n}"${hidden ? " hidden" : ""}>
+      <div class="trend-panel"><h3>24-hour PSI <small>daily peak, highest region</small></h3><figure class="chart cmp-chart">${compareSvg("psi", n)}</figure></div>
+      <div class="trend-panel"><h3>24-hour PM2.5 <small>µg/m³, daily peak, highest region</small></h3><figure class="chart cmp-chart">${compareSvg("pm", n)}</figure></div>
+    </div>`;
+  return `<div class="cmp-tools">
+    <div class="map-tools" role="group" aria-label="Comparison period">
+      <button type="button" class="map-btn" data-range="30" aria-pressed="true">1 month</button>
+      ${yearReady ? `<button type="button" class="map-btn" data-range="365" aria-pressed="false">1 year</button>` : ""}
+    </div>
+    <p class="cmp-legend"><span class="key k-this"></span>This year <span class="key k-last"></span>Last year, same dates</p>
   </div>
-  <figure class="chart years-chart">
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily peak 24-hour PSI, 1 September to 31 October, ${thisYear} compared with ${lastYear}. ${thisYear} peak so far ${a.peak.psi}, ${lastYear} peak ${bAll.peak.psi}.">
-      <g class="grid">${grid}</g><g class="axis">${axis}</g>
-      <line class="limit" x1="${L}" x2="${W - R}" y1="${Y(100)}" y2="${Y(100)}"/><text class="limit-t" x="${L + 4}" y="${Y(100) - 5}">Unhealthy above 100</text>
-      ${line(prev, "y1", lastYear)}${line(cur, "y0", thisYear)}
-    </svg>
-    <figcaption><span class="key y0"></span>${thisYear} <span class="key y1"></span>${lastYear}. Each point is the day's highest regional 24-hour PSI from NEA.</figcaption>
-  </figure>`;
+  ${view(30, false)}
+  ${yearReady ? view(365, true) : ""}
+  <p class="meta">Each point is the day's highest regional 24-hour reading from NEA, up to ${fmtDate(month.end)}. Hover or tap a day to see both years.${yearReady && known < 365 ? ` <span data-range-note="365" hidden>Older days are being added a few at a time to keep the load on NEA's servers light: ${known} of 365 days so far.</span>` : ""}</p>`;
 }
 
 function hotspotTrend() {
@@ -382,10 +405,12 @@ const pmSentence = pmSnap
   ? `The 1-hour PM2.5 reading was ${pmSnap.min}–${pmSnap.max} µg/m³ at ${fmtDT(pmSnap.ts)} SGT, highest in the ${pmSnap.hot.join(" and ")} (${pmBand(pmSnap.max)}).`
   : "";
 const yearSentence = (() => {
-  const ys = yearStats();
-  if (!ys) return "";
-  const cutLabel = fmtDate(`${ys.thisYear}-${ys.cut}`).replace(/ \d{4}$/, "");
-  return `From 1 Sep to ${cutLabel}, ${ys.thisYear} had ${ys.a.over100} days with a 24-hour PSI above 100 and a peak of ${ys.a.peak.psi}, compared with ${ys.b.over100} days and a peak of ${ys.b.peak.psi} over the same dates in ${ys.lastYear}.`;
+  const cd = compareData(30);
+  if (!cd) return "";
+  const avg = (key, i) => { const v = cd.rows.map((r) => r[key] && r[key][i]).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+  const [pa, pb, ma, mb] = [avg("a", 0), avg("b", 0), avg("a", 1), avg("b", 1)];
+  if (pa == null || pb == null) return "";
+  return `Over the 30 days to ${fmtDate(cd.end)}, Singapore's daily peak 24-hour PSI averaged ${pa}${ma != null ? ` and daily peak 24-hour PM2.5 averaged ${ma} µg/m³` : ""}, compared with ${pb}${mb != null ? ` and ${mb} µg/m³` : ""} over the same dates a year earlier.`;
 })();
 
 // ---------- FAQ ----------
@@ -395,7 +420,7 @@ const FAQ = [
   ["What is the PSI in Singapore?", "The Pollutant Standards Index is the air quality index used by Singapore's National Environment Agency. It combines six pollutants: PM2.5, PM10, ozone, carbon monoxide, sulphur dioxide and nitrogen dioxide. Each one gets a sub-index and the PSI is the highest of them. During haze, PM2.5 almost always sets the PSI."],
   ["What PSI level is unhealthy?", "A 24-hour PSI of 0 to 50 is good and 51 to 100 is moderate. 101 to 200 is unhealthy, 201 to 300 is very unhealthy, and anything above 300 is hazardous."],
   ["Should I look at the 24-hour PSI or the 1-hour PM2.5?", "Use the 24-hour PSI and NEA's forecast to plan the next day, and follow the health advice for that band. Use the 1-hour PM2.5 reading to decide on something you are about to do right now, such as a run."],
-  ...(yearSentence ? [["How does this year's haze compare with last year?", `${yearSentence} The chart on this page shows both years day by day.`]] : []),
+  ...(yearSentence ? [["How does this year's haze compare with last year?", `${yearSentence} The charts on this page compare both years day by day, over the past month or the past year.`]] : []),
   ["Is it safe to exercise outdoors during the haze?", "At an unhealthy PSI, healthy adults should cut down on long or strenuous outdoor exercise. Children, the elderly and pregnant women should keep it to a minimum, and people with heart or lung conditions should avoid it. At very unhealthy levels, everyone should avoid strenuous outdoor activity."],
   ["Do I need an N95 mask?", "Not for short exposure such as commuting or walking between buildings, or when you are indoors. An N95 mask helps if you must spend long periods outdoors when the PSI is unhealthy or worse. N95 masks are not designed for young children, and the elderly, pregnant women and people with heart or lung conditions should ask a doctor first."],
   ["When do schools close in Singapore because of haze?", "MOE considers closing schools when the next day's 24-hour PSI forecast is hazardous, above 300. In 2015, MOE primary and secondary schools, special education schools and kindergartens closed for one day. Every MOE classroom now has an air purifier."],
@@ -430,7 +455,7 @@ const datasetLd = (path) => ({
   variableMeasured: ["24-hour PSI", "1-hour PM2.5", "24-hour PM2.5", "24-hour PM10", "8-hour ozone"],
   distribution: [
     { "@type": "DataDownload", encodingFormat: "application/json", contentUrl: SITE + "/data/live.json" },
-    { "@type": "DataDownload", encodingFormat: "application/json", contentUrl: SITE + "/data/history.json" },
+    { "@type": "DataDownload", encodingFormat: "application/json", contentUrl: SITE + "/data/daily.json" },
   ],
 });
 
@@ -530,7 +555,6 @@ function home() {
   const summary = snap
     ? `${psiSentence} ${pmSentence}${live.advisory?.forecastBand ? ` NEA forecasts the 24-hour PSI to be ${live.advisory.forecastBand.toLowerCase()} over the next 24 hours.` : ""}${hs ? ` NEA's latest satellite pass found ${num(hs.total)} hotspots in the region, ${num(hs.byRegion.find((r) => r.name === "Kalimantan")?.count || 0)} in Kalimantan and ${num(hs.byRegion.find((r) => r.name === "Sumatra")?.count || 0)} in Sumatra.` : ""}`
     : "";
-  const thisYear = +GENERATED.slice(0, 4);
 
   const body = `
 ${hero("psi")}
@@ -569,10 +593,10 @@ ${hero("psi")}
 
 <section class="block" aria-labelledby="h-years">
   <div class="block-head">
-    <h2 id="h-years">${thisYear} haze vs ${thisYear - 1}</h2>
-    <p>Daily peak 24-hour PSI over the same 1 September to 31 October window.</p>
+    <h2 id="h-years">PSI and PM2.5: this year vs last year</h2>
+    <p>Each day's peak reading compared with the same date a year earlier.</p>
   </div>
-  ${yearsBlock()}
+  ${compareBlock()}
 </section>
 
 <section class="block" aria-labelledby="h-map">
@@ -830,7 +854,7 @@ rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 for (const f of ["assets", "robots.txt", "site.webmanifest", "CNAME"]) if (existsSync(join(ROOT, f))) cpSync(join(ROOT, f), join(DIST, f), { recursive: true });
 mkdirSync(join(DIST, "data"), { recursive: true });
-for (const f of ["live.json", "history.json", "updates.json", "lastyear.json"]) if (existsSync(join(ROOT, "data", f))) cpSync(join(ROOT, "data", f), join(DIST, "data", f));
+for (const f of ["live.json", "history.json", "updates.json", "daily.json"]) if (existsSync(join(ROOT, "data", f))) cpSync(join(ROOT, "data", f), join(DIST, "data", f));
 writeFileSync(join(DIST, ".nojekyll"), "");
 
 write("index.html", home());
@@ -869,8 +893,8 @@ ${yearSentence}
 
 ## Data (JSON)
 - [live.json](${SITE}/data/live.json): PSI and PM2.5 snapshot, last 24 hours by region, NEA advisory, hotspots, haze areas, headlines (every 30 min)
-- [lastyear.json](${SITE}/data/lastyear.json): last year's daily peak 24-hour PSI, 1 Sep to 31 Oct
-- [history.json](${SITE}/data/history.json): daily peak PSI and hotspot totals this season
+- [daily.json](${SITE}/data/daily.json): daily peak 24-hour PSI and PM2.5 for the past year and the year before
+- [history.json](${SITE}/data/history.json): daily NEA hotspot totals this season
 `.replace(/\n{3,}/g, "\n\n")
 );
 console.log("built dist/ from data generated", GENERATED);
