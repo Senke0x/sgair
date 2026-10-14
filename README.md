@@ -12,8 +12,8 @@ Static haze tracker for Singapore. No server, no database, no npm install.
 | SG / Indonesia / Malaysia headlines | every 30 min | same, from Google News RSS (title, publisher, time, link) |
 | 3-day PSI estimate | every 30 min while the page is open | browser calls Open-Meteo (CAMS model), scaled to NEA's latest reading |
 | Readings and charts baked into the HTML (SEO) | every 30 min | `scripts/build.mjs` + `assets/charts.js` |
-| Daily peak PSI and hotspot totals (this year) | daily | `data/history.json`, committed by the workflow |
-| Last year's daily peak PSI, 1 Sep–31 Oct | once a year | `scripts/years.mjs` → `data/lastyear.json` (61 calls once, then none) |
+| Daily hotspot totals | daily | `data/history.json`, committed by the workflow |
+| Daily peak PSI and PM2.5, past year and the year before (this year vs last year) | daily | `scripts/daily.mjs` → `data/daily.json`: one NEA call per day, each day fetched once. Missing days are filled at most 12 per run (latest month first), then 1 call a day |
 | Background and "Key events" summaries | by hand | `data/updates.json` |
 
 Visitors' browsers do not call data.gov.sg: they read `/data/live.json`, so NEA's load stays the same however many people visit. Only if that copy is more than 90 minutes old does the page ask data.gov.sg for the latest reading.
@@ -45,6 +45,6 @@ The key lives in `scripts/build.mjs` (`GMAPS_KEY`, or set a `GMAPS_KEY` env var)
 
 ## Notes
 
-- data.gov.sg rate-limits unauthenticated calls per IP. The workflow makes about 3 calls per run (PSI, PM2.5, weather) plus one a day for history. Never put a data.gov.sg API key in browser code.
+- data.gov.sg rate-limits unauthenticated calls per IP. The workflow makes about 3 calls per run (PSI, PM2.5, weather) plus one a day for `daily.json`. Never put a data.gov.sg API key in browser code.
 - Open-Meteo is free for non-commercial use. Buy a plan if the site carries ads.
 - Headlines show only the publisher's title and a link. Write any summaries in `updates.json` in your own words.

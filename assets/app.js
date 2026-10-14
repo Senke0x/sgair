@@ -353,8 +353,23 @@
     setText("#last-refresh", `Last refreshed ${fmtClock(new Date(state.lastLoad))}`);
   }
 
+  // this year vs last year: 1 month / 1 year switch (both views are baked into the page)
+  function bindRangeChips() {
+    const tools = document.querySelector(".cmp-tools");
+    if (!tools) return;
+    tools.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-range]");
+      if (!b) return;
+      const n = b.dataset.range;
+      tools.querySelectorAll("[data-range]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+      document.querySelectorAll("[data-range-view]").forEach((v) => { v.hidden = v.dataset.rangeView !== n; });
+      document.querySelectorAll("[data-range-note]").forEach((v) => { v.hidden = v.dataset.rangeNote !== n; });
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     bindRegionChips();
+    bindRangeChips();
     // the build bakes the last 24 hours into the page, so the region switch works at once
     try {
       const baked = JSON.parse(($("#trend-data") || {}).textContent || "null");
