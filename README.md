@@ -6,14 +6,17 @@ Static haze tracker for Singapore. No server, no database, no npm install.
 
 | What | How often | How |
 |---|---|---|
-| 24-hr PSI, 1-hr PM2.5, wind, PSI trend | every 30 min while the page is open | browser calls NEA's data.gov.sg API directly (`assets/app.js`) |
-| 3-day PSI estimate | every 30 min | browser calls Open-Meteo (CAMS model), scaled to NEA's latest reading |
-| NEA 24-hr PSI forecast and situation update | every 30 min | `scripts/update.mjs` → `data/live.json` |
+| 24-hr PSI, 1-hr PM2.5 and the last 24 hours by region | every 30 min | `scripts/update.mjs` → `data/live.json` (2 NEA calls per run: today's PSI and PM2.5; earlier rows are reused) |
+| NEA 24-hr PSI forecast, wind and situation update | every 30 min | same |
 | NEA fire hotspots and smoke haze areas (map) | every 30 min | same, from the KML files on haze.gov.sg |
 | SG / Indonesia / Malaysia headlines | every 30 min | same, from Google News RSS (title, publisher, time, link) |
-| PSI snapshot baked into the HTML (SEO) | every 30 min | `scripts/build.mjs` |
-| Daily peak PSI and hotspot totals | daily | `data/history.json`, committed by the workflow |
-| Background and "Key events" summaries | by hand (or a daily Claude task) | `data/updates.json` |
+| 3-day PSI estimate | every 30 min while the page is open | browser calls Open-Meteo (CAMS model), scaled to NEA's latest reading |
+| Readings and charts baked into the HTML (SEO) | every 30 min | `scripts/build.mjs` + `assets/charts.js` |
+| Daily peak PSI and hotspot totals (this year) | daily | `data/history.json`, committed by the workflow |
+| Last year's daily peak PSI, 1 Sep–31 Oct | once a year | `scripts/years.mjs` → `data/lastyear.json` (61 calls once, then none) |
+| Background and "Key events" summaries | by hand | `data/updates.json` |
+
+Visitors' browsers do not call data.gov.sg: they read `/data/live.json`, so NEA's load stays the same however many people visit. Only if that copy is more than 90 minutes old does the page ask data.gov.sg for the latest reading.
 
 GitHub Actions (`.github/workflows/update.yml`) runs `update.mjs` → `build.mjs` → deploys `dist/` to GitHub Pages at :07 and :37 past each hour. Open tabs also re-read `data/live.json` every 30 minutes (`assets/live.js`), so nobody has to reload.
 
@@ -42,6 +45,6 @@ The key lives in `scripts/build.mjs` (`GMAPS_KEY`, or set a `GMAPS_KEY` env var)
 
 ## Notes
 
-- data.gov.sg rate-limits unauthenticated calls per IP. Visitors call from their own browsers, about 5 requests per 30 min; the workflow makes about 3 per run. Never put a data.gov.sg API key in browser code.
+- data.gov.sg rate-limits unauthenticated calls per IP. The workflow makes about 3 calls per run (PSI, PM2.5, weather) plus one a day for history. Never put a data.gov.sg API key in browser code.
 - Open-Meteo is free for non-commercial use. Buy a plan if the site carries ads.
 - Headlines show only the publisher's title and a link. Write any summaries in `updates.json` in your own words.

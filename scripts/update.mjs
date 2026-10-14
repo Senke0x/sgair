@@ -161,20 +161,61 @@ async function headlines() {
   return out;
 }
 
-// ---------- PSI snapshot ----------
-async function psiNow() {
-  const psi = await get(`${DGS}/psi`);
-  await sleep(600);
-  const pm = await get(`${DGS}/pm25`);
-  const p = psi.data.items.at(-1), q = pm.data.items.at(-1);
+// ---------- PSI / PM2.5 now and the last 24 hours, per region ----------
+// Light on NEA's API: each run asks only for today's readings (one PSI and one PM2.5 call).
+// Older rows come from the previous live.json; yesterday is fetched only if they are missing.
+// trend rows: [epochMs, north, south, east, west, central]
+async function dayItems(endpoint, date) {
+  const items = [];
+  let token = null;
+  for (let i = 0; i < 6; i++) {
+    const qs = new URLSearchParams(date ? { date } : {});
+    if (token) qs.set("paginationToken", token);
+    const j = await get(`${DGS}/${endpoint}${qs.toString() ? "?" + qs : ""}`);
+    items.push(...((j.data && j.data.items) || []));
+    token = j.data && j.data.paginationToken;
+    if (!token) break;
+    await sleep(800);
+  }
+  return items.sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1)); // dated queries come back newest first
+}
+const toRows = (items, key) =>
+  items
+    .map((it) => { const r = it.readings && it.readings[key]; return r ? [Date.parse(it.timestamp), ...REGIONS.map((k) => (typeof r[k] === "number" ? r[k] : null))] : null; })
+    .filter(Boolean);
+
+async function readings(prev) {
+  const cutoff = Date.now() - 26 * 3600e3;
+  const out = {};
+  for (const [endpoint, key, name] of [["psi", "psi_twenty_four_hourly", "psi"], ["pm25", "pm25_one_hourly", "pm"]]) {
+    let items = await dayItems(endpoint, sgDate(0));
+    if (!items.length) { await sleep(800); items = await dayItems(endpoint); } // just after midnight: latest only
+    const old = (prev.trend && prev.trend[name]) || [];
+    let rows = toRows(items, key);
+    const startToday = Date.parse(`${sgDate(0)}T00:00:00+08:00`);
+    if (!old.some((r) => r[0] < startToday && r[0] >= cutoff)) {
+      // no saved rows from yesterday (first run, or a gap): fetch yesterday once
+      await sleep(800);
+      try { rows = [...toRows(await dayItems(endpoint, sgDate(-1)), key), ...rows]; } catch (e) { log("readings", endpoint, "yesterday", e.message); }
+    }
+    const byT = new Map();
+    for (const r of [...old, ...rows]) if (r[0] >= cutoff) byT.set(r[0], r);
+    out[name] = { latest: items.at(-1), rows: [...byT.values()].sort((x, y) => x[0] - y[0]) };
+    await sleep(800);
+  }
+  const p = out.psi.latest, q = out.pm.latest;
+  if (!p) throw new Error("no PSI reading");
   return {
-    timestamp: p.timestamp,
-    psi: p.readings.psi_twenty_four_hourly,
-    pm25_24h: p.readings.pm25_twenty_four_hourly,
-    pm10_24h: p.readings.pm10_twenty_four_hourly,
-    o3_8h: p.readings.o3_eight_hour_max,
-    pm25_1h: q ? q.readings.pm25_one_hourly : null,
-    pm25_1h_timestamp: q ? q.timestamp : null,
+    now: {
+      timestamp: p.timestamp,
+      psi: p.readings.psi_twenty_four_hourly,
+      pm25_24h: p.readings.pm25_twenty_four_hourly,
+      pm10_24h: p.readings.pm10_twenty_four_hourly,
+      o3_8h: p.readings.o3_eight_hour_max,
+      pm25_1h: q ? q.readings.pm25_one_hourly : null,
+      pm25_1h_timestamp: q ? q.timestamp : null,
+    },
+    trend: { psi: out.psi.rows, pm: out.pm.rows },
   };
 }
 
@@ -251,19 +292,20 @@ const tasks = {
   advisory: neaAdvisory,
   kml: neaKml,
   headlines,
-  now: psiNow,
+  readings: () => readings(prev),
   weather: weatherNow,
 };
 for (const [k, fn] of Object.entries(tasks)) {
   try {
     const v = await fn();
-    if (k === "kml") Object.assign(live, v);
+    if (k === "kml" || k === "readings") Object.assign(live, v);
     else live[k] = v;
     live.sources[k] = "ok";
   } catch (e) {
     live.sources[k] = `failed: ${e.message}`;
     log(k, "failed, keeping previous:", e.message);
     if (k === "kml") { if (prev.hotspots) live.hotspots = prev.hotspots; if (prev.haze) live.haze = prev.haze; }
+    else if (k === "readings") { if (prev.now) live.now = prev.now; if (prev.trend) live.trend = prev.trend; }
     else if (prev[k]) live[k] = prev[k];
   }
 }

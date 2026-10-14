@@ -1,8 +1,9 @@
 /* sgairquality.com live data. No build step, no dependencies.
  * Sources:
- *  - NEA via data.gov.sg real-time API (PSI, PM2.5, 24-hr weather forecast)
- *  - Open-Meteo air-quality API (CAMS global model) for the PM2.5 forecast
- * Refreshes every 30 minutes. */
+ *  - NEA readings (24-hr PSI, 1-hr PM2.5, wind) from /data/live.json, which the site's
+ *    scheduled job copies from data.gov.sg every 30 minutes (data.gov.sg directly only as a fallback)
+ *  - Open-Meteo air-quality API (CAMS global model) for the 3-day PSI estimate
+ * Refreshes every 30 minutes. Works on any page: every element is optional. */
 (() => {
   "use strict";
 
@@ -12,10 +13,12 @@
   const REFRESH_MS = 30 * 60 * 1000;
   const REGIONS = ["north", "south", "east", "west", "central"];
   const REGION_NAME = { north: "North", south: "South", east: "East", west: "West", central: "Central" };
-  const HIST_KEY = "sgaq-psi-history-v1";
+  const REGION_KEY = "sgaq-trend-region";
 
   const $ = (sel) => document.querySelector(sel);
-  const state = { lastLoad: 0, yesterday: { date: null, items: [] }, loading: false };
+  const setText = (sel, v) => { const el = $(sel); if (el) el.textContent = v; };
+  const state = { lastLoad: 0, loading: false, cache: {}, rows: { psi: [], pm: [] }, region: "max" };
+  try { state.region = localStorage.getItem(REGION_KEY) || "max"; } catch { /* storage blocked: fine */ }
 
   // ---------- scales ----------
   const BANDS = [
@@ -26,6 +29,13 @@
     { key: "hazardous", max: Infinity, label: "Hazardous" },
   ];
   const bandOf = (psi) => BANDS.find((b) => psi <= b.max);
+  const PM_BANDS = [
+    { key: "good", max: 55, label: "Band I Normal" },
+    { key: "unhealthy", max: 150, label: "Band II Elevated" },
+    { key: "very", max: 250, label: "Band III High" },
+    { key: "hazardous", max: Infinity, label: "Band IV Very high" },
+  ];
+  const pmBandOf = (v) => PM_BANDS.find((b) => v <= b.max);
 
   const ADVICE = {
     good: "Air quality is good. Carry on with normal activities.",
@@ -37,13 +47,12 @@
     hazardous:
       "Healthy people should keep outdoor activity to a minimum. Children, the elderly, pregnant women and people with heart or lung conditions should avoid going outdoors.",
   };
-
-  function pmBand(v) {
-    if (v <= 55) return "Band I Normal";
-    if (v <= 150) return "Band II Elevated";
-    if (v <= 250) return "Band III High";
-    return "Band IV Very high";
-  }
+  const PM_ADVICE = {
+    good: "PM2.5 is in the normal band this hour. Outdoor plans are fine.",
+    unhealthy: "PM2.5 is elevated this hour. Consider a shorter or easier session outdoors, especially if you are sensitive to haze.",
+    very: "PM2.5 is high this hour. Move strenuous activity indoors, and sensitive groups should stay inside.",
+    hazardous: "PM2.5 is very high this hour. Stay indoors with windows closed and an air purifier on if you have one.",
+  };
 
   // NEA PSI sub-index for 24-hr PM2.5 (µg/m³)
   const PM25_BP = [
@@ -64,17 +73,11 @@
 
   // ---------- time helpers (all display in Singapore time) ----------
   const SGT = "Asia/Singapore";
-  function sgDate(offsetDays = 0) {
-    const d = new Date(Date.now() + 8 * 3600e3 + offsetDays * 864e5);
-    return d.toISOString().slice(0, 10);
-  }
-  const fmtTime = (d) =>
-    d.toLocaleString("en-SG", { timeZone: SGT, hour: "numeric", minute: "2-digit", day: "numeric", month: "short" });
+  const sgDate = (offsetDays = 0) => new Date(Date.now() + 8 * 3600e3 + offsetDays * 864e5).toISOString().slice(0, 10);
+  const fmtTime = (d) => d.toLocaleString("en-SG", { timeZone: SGT, hour: "numeric", minute: "2-digit", day: "numeric", month: "short" });
   const fmtDay = (d) => {
-    const parts = Object.fromEntries(
-      new Intl.DateTimeFormat("en-SG", { timeZone: SGT, weekday: "short", day: "numeric", month: "short" }).formatToParts(d).map((p) => [p.type, p.value])
-    );
-    return `${parts.weekday} ${parts.day} ${parts.month}`;
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-SG", { timeZone: SGT, weekday: "short", day: "numeric", month: "short" }).formatToParts(d).map((x) => [x.type, x.value]));
+    return `${p.weekday} ${p.day} ${p.month}`;
   };
   const fmtClock = (d) => d.toLocaleTimeString("en-SG", { timeZone: SGT, hour: "numeric", minute: "2-digit" });
   const sgYmd = (d) => new Date(d.getTime() + 8 * 3600e3).toISOString().slice(0, 10);
@@ -116,118 +119,108 @@
     return items;
   }
 
-  const maxPsi = (item) => {
-    const r = item.readings && item.readings.psi_twenty_four_hourly;
-    if (!r) return null;
-    const vals = REGIONS.map((k) => r[k]).filter((v) => typeof v === "number");
-    return vals.length ? Math.max(...vals) : null;
+  const maxOf = (obj) => {
+    const v = obj ? REGIONS.map((k) => obj[k]).filter((x) => typeof x === "number") : [];
+    return v.length ? Math.max(...v) : null;
   };
-
-  // Keep a small local history so the trend line still works if the API only returns the latest reading.
-  function readHist() {
-    try {
-      return JSON.parse(localStorage.getItem(HIST_KEY) || "{}");
-    } catch {
-      return {};
-    }
-  }
-  function writeHist(points) {
-    try {
-      const h = readHist();
-      for (const p of points) h[p.t] = p.v;
-      const cutoff = Date.now() - 72 * 3600e3;
-      for (const k of Object.keys(h)) if (+k < cutoff) delete h[k];
-      localStorage.setItem(HIST_KEY, JSON.stringify(h));
-    } catch {
-      /* storage unavailable: fine */
-    }
-  }
-
-  async function loadPsi() {
-    const today = sgDate(0);
-    const yday = sgDate(-1);
-    let todayItems = [];
-    try {
-      todayItems = await fetchItems("psi", today);
-    } catch (e) {
-      todayItems = [];
-    }
-    if (!todayItems.length) todayItems = await fetchItems("psi"); // latest only
-    if (state.yesterday.date !== yday) {
-      try {
-        state.yesterday = { date: yday, items: await fetchItems("psi", yday) };
-      } catch {
-        state.yesterday = { date: yday, items: [] };
-      }
-    }
-    const all = [...state.yesterday.items, ...todayItems];
-    const seen = new Map();
-    for (const it of all) seen.set(it.timestamp, it);
-    const items = [...seen.values()].sort((a, b) => (a.timestamp < b.timestamp ? -1 : 1));
-    const points = items
-      .map((it) => ({ t: Date.parse(it.timestamp), v: maxPsi(it) }))
-      .filter((p) => p.v != null);
-    writeHist(points);
-    const hist = readHist();
-    const merged = Object.keys(hist)
-      .map((k) => ({ t: +k, v: hist[k] }))
-      .sort((a, b) => a.t - b.t);
-    return { latest: items[items.length - 1], series: merged };
-  }
 
   // ---------- rendering ----------
   function renderNow(psiItem, pmItem) {
     const r = psiItem.readings;
     const psi = r.psi_twenty_four_hourly;
-    const max = maxPsi(psiItem);
+    const max = maxOf(psi);
     const b = bandOf(max);
-    const vals = REGIONS.map((k) => psi[k]);
-    const min = Math.min(...vals);
+    const min = Math.min(...REGIONS.map((k) => psi[k]).filter((v) => typeof v === "number"));
     const hot = REGIONS.filter((k) => psi[k] === max).map((k) => REGION_NAME[k]);
+    const pm = pmItem && pmItem.readings && pmItem.readings.pm25_one_hourly;
+    const pmMax = maxOf(pm);
+    const pb = pmMax != null ? pmBandOf(pmMax) : null;
+    const isPm = document.body.classList.contains("pm-page");
 
-    document.body.dataset.band = b.key;
+    document.body.dataset.band = isPm && pb ? pb.key : b.key;
     document.body.style.setProperty("--haze", Math.max(0, Math.min(0.85, (max - 50) / 280)).toFixed(2));
 
-    $("#psi-max").textContent = max;
-    $("#psi-band").textContent = b.label;
-    $("#psi-advice").textContent = ADVICE[b.key];
+    setText("#psi-max", max);
+    setText("#psi-band", b.label);
+    const psiBand = $("#psi-band"); if (psiBand) psiBand.dataset.band = b.key;
+    if (pmMax != null) {
+      setText("#pm-max", pmMax);
+      setText("#pm-band", pb.label);
+      const pmBandEl = $("#pm-band"); if (pmBandEl) pmBandEl.dataset.band = pb.key;
+      setText("#pm-advice", PM_ADVICE[pb.key]);
+    }
+    setText("#psi-advice", ADVICE[b.key]);
     const ts = new Date(psiItem.timestamp);
-    $("#psi-time").textContent = `${hot.join(" and ")} highest. Island range ${min}–${max}. NEA reading for ${fmtTime(ts)}.`;
+    setText("#psi-time", isPm && pmItem
+      ? `Highest 1-hr PM2.5 in ${REGIONS.filter((k) => pm[k] === pmMax).map((k) => REGION_NAME[k]).join(" and ")}. NEA reading for ${fmtTime(new Date(pmItem.timestamp))}.`
+      : `${hot.join(" and ")} highest. Island range ${min}–${max}. NEA reading for ${fmtTime(ts)}.`);
 
-    const pm = pmItem && pmItem.readings && pmItem.readings.pm25_one_hourly;
     for (const k of REGIONS) {
       const el = document.querySelector(`.reg[data-region="${k}"]`);
       if (!el) continue;
-      el.dataset.band = bandOf(psi[k]).key;
-      el.querySelector(".reg-psi").textContent = psi[k];
-      el.querySelector(".reg-pm").textContent = pm && pm[k] != null ? `PM2.5 ${pm[k]}` : "PM2.5 –";
-      el.setAttribute("aria-label", `${REGION_NAME[k]}: PSI ${psi[k]}, ${bandOf(psi[k]).label}`);
+      const pv = pm && pm[k];
+      if (isPm) {
+        el.dataset.band = pv != null ? pmBandOf(pv).key : "";
+        el.querySelector(".reg-psi").textContent = pv ?? "–";
+        el.querySelector(".reg-pm").textContent = `PSI ${psi[k]}`;
+        el.setAttribute("aria-label", `${REGION_NAME[k]}: 1-hr PM2.5 ${pv ?? "not available"}, PSI ${psi[k]}`);
+      } else {
+        el.dataset.band = bandOf(psi[k]).key;
+        el.querySelector(".reg-psi").textContent = psi[k];
+        el.querySelector(".reg-pm").textContent = pv != null ? `PM2.5 ${pv}` : "PM2.5 –";
+        el.setAttribute("aria-label", `${REGION_NAME[k]}: PSI ${psi[k]}, ${bandOf(psi[k]).label}, 1-hr PM2.5 ${pv ?? "not available"}`);
+      }
     }
 
-    const rows = REGIONS.slice()
-      .sort((a, b2) => psi[b2] - psi[a])
-      .map((k) => {
-        const bb = bandOf(psi[k]);
-        const p1 = pm && pm[k];
-        return `<tr>
+    const tbody = $("#readings tbody");
+    if (tbody) {
+      tbody.innerHTML = REGIONS.slice()
+        .sort((a, b2) => psi[b2] - psi[a])
+        .map((k) => {
+          const bb = bandOf(psi[k]);
+          const p1 = pm && pm[k];
+          const pp = p1 != null ? pmBandOf(p1) : null;
+          return `<tr>
           <th scope="row">${REGION_NAME[k]}</th>
           <td><span class="pill ${bb.key}">${psi[k]}</span> <span class="pm-tag">${bb.label}</span></td>
-          <td>${p1 != null ? `${p1}<span class="pm-tag">${pmBand(p1)}</span>` : "–"}</td>
+          <td>${p1 != null ? `<span class="pill ${pp.key}">${p1}</span> <span class="pm-tag">${pp.label}</span>` : "–"}</td>
           <td>${r.pm25_twenty_four_hourly?.[k] ?? "–"}</td>
           <td>${r.pm10_twenty_four_hourly?.[k] ?? "–"}</td>
           <td>${r.o3_eight_hour_max?.[k] ?? "–"}</td>
         </tr>`;
-      })
-      .join("");
-    $("#readings tbody").innerHTML = rows;
+        })
+        .join("");
+    }
     document.dispatchEvent(new CustomEvent("sgaq:psi", { detail: psi }));
   }
 
   function renderError(msg) {
-    $("#psi-band").textContent = "Readings unavailable";
-    $("#psi-advice").innerHTML = `${msg} We'll try again automatically. Meanwhile, see <a href="https://www.haze.gov.sg/">haze.gov.sg</a>.`;
-    $("#psi-time").textContent = "No data yet";
-    $("#readings tbody").innerHTML = `<tr><td colspan="6" class="muted">${msg}</td></tr>`;
+    setText("#psi-band", "Readings unavailable");
+    const adv = $("#psi-advice");
+    if (adv) adv.innerHTML = `${msg} We'll try again automatically. Meanwhile, see <a href="https://www.haze.gov.sg/">haze.gov.sg</a>.`;
+    setText("#psi-time", "No data yet");
+  }
+
+  // ---------- 24-hour trends ----------
+  function renderTrends() {
+    const C = window.sgaqCharts;
+    if (!C) return;
+    for (const [kind, sel] of [["psi", "#chart-psi"], ["pm", "#chart-pm"]]) {
+      const fig = $(sel);
+      if (fig && state.rows[kind].length) fig.innerHTML = C.svg(kind, state.rows[kind], state.region);
+    }
+    document.querySelectorAll(".trend-tools [data-region]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.region === state.region)));
+  }
+  function bindRegionChips() {
+    const tools = $(".trend-tools");
+    if (!tools) return;
+    tools.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-region]");
+      if (!b) return;
+      state.region = b.dataset.region;
+      try { localStorage.setItem(REGION_KEY, state.region); } catch { /* fine */ }
+      renderTrends();
+    });
   }
 
   // ---------- forecast ----------
@@ -241,18 +234,14 @@
       for (let j = i - 23; j <= i; j++) if (pm[j] != null) { s += pm[j]; n++; }
       return n >= 18 ? s / n : null;
     });
-
     // scale the model to match NEA's latest observed 24-hr PM2.5 (highest region)
     let ratio = 1;
     if (latestPsiItem) {
-      const obs = latestPsiItem.readings.pm25_twenty_four_hourly;
-      const obsMax = obs ? Math.max(...REGIONS.map((k) => obs[k]).filter((v) => typeof v === "number")) : null;
-      const obsT = Date.parse(latestPsiItem.timestamp);
-      const idx = t.findIndex((x) => x >= obsT);
+      const obsMax = maxOf(latestPsiItem.readings.pm25_twenty_four_hourly);
+      const idx = t.findIndex((x) => x >= Date.parse(latestPsiItem.timestamp));
       const model = idx >= 0 ? roll[idx] : null;
       if (obsMax && model) ratio = Math.min(4, Math.max(0.5, obsMax / model));
     }
-
     const now = Date.now();
     const series = [];
     for (let i = 0; i < t.length; i++) {
@@ -264,6 +253,7 @@
 
   function renderForecastDays(fc) {
     const box = $("#forecast-days");
+    if (!box) return;
     if (!fc || !fc.series.length) {
       box.innerHTML = `<li class="muted">The forecast model didn't respond. Check NEA's outlook alongside.</li>`;
       return;
@@ -275,8 +265,8 @@
       byDay.get(k).push(p.v);
     }
     const today = sgDate(0);
-    const days = [...byDay.entries()].slice(0, 4);
-    box.innerHTML = days
+    box.innerHTML = [...byDay.entries()]
+      .slice(0, 4)
       .map(([k, vals]) => {
         const hi = Math.max(...vals), lo = Math.min(...vals);
         const b = bandOf(hi);
@@ -289,88 +279,14 @@
         </li>`;
       })
       .join("");
-    $("#forecast-note").textContent =
-      `Estimated peak 24-hour PSI. CAMS model PM2.5 via Open-Meteo, scaled ×${fc.ratio.toFixed(2)} to match NEA's latest readings. Not an official forecast.`;
-  }
-
-  // ---------- chart ----------
-  function renderChart(obs, fc) {
-    const fig = $("#chart");
-    const now = Date.now();
-    const x0 = now - 24 * 3600e3;
-    const x1 = now + 72 * 3600e3;
-    const o = obs.filter((p) => p.t >= x0);
-    const f = fc ? fc.series.filter((p) => p.t <= x1) : [];
-    if (!o.length && !f.length) {
-      fig.innerHTML = `<div class="chart-empty muted">No readings to chart yet.</div>`;
-      return;
-    }
-    const W = 900, H = 300, L = 40, R = 12, T = 12, B = 34;
-    const peak = Math.max(120, ...o.map((p) => p.v), ...f.map((p) => p.v));
-    const yMax = Math.ceil((peak + 20) / 50) * 50;
-    const X = (t) => L + ((t - x0) / (x1 - x0)) * (W - L - R);
-    const Y = (v) => T + (1 - v / yMax) * (H - T - B);
-
-    const bandDefs = [
-      [0, 50, "good", "Good"],
-      [50, 100, "moderate", "Moderate"],
-      [100, 200, "unhealthy", "Unhealthy"],
-      [200, 300, "very", "Very unhealthy"],
-      [300, 500, "hazardous", "Hazardous"],
-    ];
-    const bands = bandDefs
-      .filter(([lo]) => lo < yMax)
-      .map(([lo, hi, k, label]) => {
-        const top = Y(Math.min(hi, yMax)), bot = Y(lo);
-        return `<rect class="band-${k}" x="${L}" y="${top}" width="${W - L - R}" height="${bot - top}"/>
-          <text x="${W - R - 6}" y="${top + 13}" text-anchor="end">${label}</text>`;
-      })
-      .join("");
-
-    const grid = [];
-    for (let v = 0; v <= yMax; v += 50) {
-      grid.push(`<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`);
-    }
-    const yLabels = [];
-    for (let v = 0; v <= yMax; v += 50) yLabels.push(`<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`);
-
-    const xLabels = [];
-    const start = new Date(sgDate(-1) + "T00:00:00+08:00").getTime();
-    for (let d = start; d <= x1; d += 864e5) {
-      for (const hOff of [0, 12]) {
-        const tt = d + hOff * 3600e3;
-        if (tt < x0 || tt > x1) continue;
-        const lbl = hOff === 0 ? fmtDay(new Date(tt)) : "12pm";
-        xLabels.push(`<text x="${X(tt)}" y="${H - 12}" text-anchor="middle">${lbl}</text>`);
-        grid.push(`<line x1="${X(tt)}" x2="${X(tt)}" y1="${T}" y2="${H - B}" opacity="${hOff ? 0.4 : 1}"/>`);
-      }
-    }
-
-    const path = (pts) =>
-      pts.map((p, i) => `${i ? "L" : "M"}${X(Math.max(x0, p.t)).toFixed(1)} ${Y(Math.min(p.v, yMax)).toFixed(1)}`).join(" ");
-    const lastObs = o[o.length - 1];
-    const fcPts = f.filter((p) => !lastObs || p.t >= lastObs.t);
-    if (lastObs && fcPts.length) fcPts.unshift(lastObs);
-
-    const desc =
-      `Highest regional 24-hour PSI: ${lastObs ? `latest ${lastObs.v}` : "no recent reading"}` +
-      (f.length ? `, model estimate peaking at ${Math.max(...f.map((p) => p.v))} in the next 3 days.` : ".");
-
-    fig.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${desc}">
-      <g class="bands">${bands}</g>
-      <g class="grid">${grid.join("")}</g>
-      <g class="axis">${yLabels.join("")}${xLabels.join("")}</g>
-      ${o.length ? `<path class="obs" d="${path(o)}"/>` : ""}
-      ${fcPts.length ? `<path class="fc" d="${path(fcPts)}"/>` : ""}
-      <g class="now"><line x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}"/><text x="${X(now) + 4}" y="${T + 24}">Now</text></g>
-    </svg>
-    <figcaption>${desc} Times in Singapore time.</figcaption>`;
+    setText("#forecast-note", `Estimated peak 24-hour PSI. CAMS model PM2.5 via Open-Meteo, scaled ×${fc.ratio.toFixed(2)} to match NEA's latest readings. Not an official forecast.`);
   }
 
   // ---------- wind ----------
   const DIRS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
   function renderWind(j) {
     const box = $("#wind");
+    if (!box) return;
     const rec = j && j.data && j.data.records && j.data.records[0];
     const g = (rec && rec.general) || (j && j.wind ? j : null);
     if (!g || !g.wind) {
@@ -381,71 +297,72 @@
     const i = DIRS.indexOf(dir);
     const from = i >= 0 ? i * 22.5 : null;
     const southerly = from != null && from >= 101.25 && from <= 258.75; // ESE through WSW
-    const arrow =
-      from == null
-        ? ""
-        : `<svg class="wind-arrow" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25"/><g transform="rotate(${from + 180} 27 27)"><path d="M27 7l9 16h-6v20h-6V23h-6z"/></g></svg>`;
+    const arrow = from == null ? "" : `<svg class="wind-arrow" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25"/><g transform="rotate(${from + 180} 27 27)"><path d="M27 7l9 16h-6v20h-6V23h-6z"/></g></svg>`;
     const sp = g.wind.speed || {};
     box.innerHTML = `<h3>Wind for the next 24 hours</h3>
       <div class="wind-row">${arrow}<p><strong>${dir || "Variable"}</strong> winds, ${sp.low ?? "?"}–${sp.high ?? "?"} km/h. ${g.forecast?.text ? `${g.forecast.text}.` : ""}</p></div>
-      <p class="meta">${
-        southerly
-          ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore."
-          : from != null
-          ? "Winds from this direction are less likely to bring smoke from the Indonesian fires."
-          : ""
-      } NEA forecast for ${g.validPeriod?.text || "the next 24 hours"}.</p>`;
+      <p class="meta">${southerly ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore." : from != null ? "Winds from this direction are less likely to bring smoke from the Indonesian fires." : ""} NEA forecast for ${g.validPeriod?.text || "the next 24 hours"}.</p>`;
   }
 
   // ---------- main loop ----------
   const settle = (p) => p.then((value) => ({ status: "fulfilled", value }), (reason) => ({ status: "rejected", reason }));
 
+  // The site's scheduled job saves NEA's readings to /data/live.json every 30 minutes, so
+  // visitors read that copy and never call data.gov.sg themselves. Only if the copy is more
+  // than 90 minutes old do we ask NEA directly, for the latest reading only.
+  const STALE_MS = 90 * 60 * 1000;
+  const asItems = (n) => ({
+    psi: { timestamp: n.timestamp, readings: { psi_twenty_four_hourly: n.psi, pm25_twenty_four_hourly: n.pm25_24h, pm10_twenty_four_hourly: n.pm10_24h, o3_eight_hour_max: n.o3_8h } },
+    pm: n.pm25_1h ? { timestamp: n.pm25_1h_timestamp || n.timestamp, readings: { pm25_one_hourly: n.pm25_1h } } : null,
+  });
+
   async function refresh() {
     if (state.loading) return;
     state.loading = true;
+    const wantForecast = !!$("#forecast-days");
+    const omP = wantForecast ? settle(getJSON(OM)) : Promise.resolve(null);
 
-    // Open-Meteo is a different host, so it can run alongside.
-    const omP = settle(getJSON(OM));
-    // data.gov.sg calls go one after another to stay under the anonymous rate limit.
-    const psiRes = await settle(loadPsi());
-    const pmRes = await settle(fetchItems("pm25"));
-    const windRes = await settle(getJSON(`${API}/twenty-four-hr-forecast`));
-    const omRes = await omP;
-
-    let latest = null, series = [];
-    if (psiRes.status === "fulfilled" && psiRes.value.latest) {
-      latest = psiRes.value.latest;
-      series = psiRes.value.series;
-      const pmItems = pmRes.status === "fulfilled" ? pmRes.value : [];
-      renderNow(latest, pmItems[pmItems.length - 1]);
+    const j = window.sgaqLive ? await window.sgaqLive.refresh() : null;
+    let psiItem = null, pmItem = null;
+    if (j && j.now && Date.now() - Date.parse(j.now.timestamp) < STALE_MS) {
+      ({ psi: psiItem, pm: pmItem } = asItems(j.now));
     } else {
-      renderError("data.gov.sg didn't return PSI readings.");
+      const psiRes = await settle(fetchItems("psi"));
+      const pmRes = await settle(fetchItems("pm25"));
+      psiItem = psiRes.status === "fulfilled" ? psiRes.value.at(-1) : null;
+      pmItem = pmRes.status === "fulfilled" ? pmRes.value.at(-1) : null;
+      if (!psiItem && j && j.now) ({ psi: psiItem, pm: pmItem } = asItems(j.now)); // old, but better than nothing
     }
+    if (psiItem) renderNow(psiItem, pmItem);
+    else renderError("NEA readings are not available right now.");
 
-    const fc = omRes.status === "fulfilled" ? buildForecast(omRes.value, latest) : null;
-    renderForecastDays(fc);
-    renderChart(series, fc);
-
-    if (windRes.status === "fulfilled" && windRes.value?.data?.records?.length) {
-      renderWind(windRes.value);
-    } else if (window.sgaqLive) {
-      // fall back to the copy the site's scheduled job saved in /data/live.json
-      window.sgaqLive.get().then((j) => renderWind(j && j.weather ? j.weather : null));
-    } else {
-      renderWind(null);
+    if (j && j.trend) {
+      if (j.trend.psi && j.trend.psi.length) state.rows.psi = j.trend.psi;
+      if (j.trend.pm && j.trend.pm.length) state.rows.pm = j.trend.pm;
     }
+    renderTrends();
+
+    if (wantForecast) {
+      const omRes = await omP;
+      renderForecastDays(omRes && omRes.status === "fulfilled" ? buildForecast(omRes.value, psiItem) : null);
+    }
+    renderWind(j && j.weather ? j.weather : null);
 
     state.lastLoad = Date.now();
     state.loading = false;
-    const stamp = $("#last-refresh");
-    if (stamp) stamp.textContent = `Last refreshed ${fmtClock(new Date(state.lastLoad))}`;
+    setText("#last-refresh", `Last refreshed ${fmtClock(new Date(state.lastLoad))}`);
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    bindRegionChips();
+    // the build bakes the last 24 hours into the page, so the region switch works at once
+    try {
+      const baked = JSON.parse(($("#trend-data") || {}).textContent || "null");
+      if (baked) state.rows = { psi: baked.psi || [], pm: baked.pm || [] };
+    } catch { /* fine */ }
+    if (state.region !== "max") renderTrends();
     refresh();
-    setInterval(() => {
-      if (Date.now() - state.lastLoad >= REFRESH_MS) refresh();
-    }, 60 * 1000);
+    setInterval(() => { if (Date.now() - state.lastLoad >= REFRESH_MS) refresh(); }, 60 * 1000);
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && Date.now() - state.lastLoad >= REFRESH_MS) refresh();
     });
