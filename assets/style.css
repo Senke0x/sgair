@@ -325,17 +325,6 @@ tbody tr:last-child > * { border-bottom: 0; }
 .hl-meta { display: block; font-size: .84rem; color: var(--muted); margin-top: 3px; }
 .page .headlines { max-width: 760px; }
 
-.season { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 10px 10px; }
-.season svg { display: block; width: 100%; height: auto; }
-.season .grid line { stroke: var(--line); }
-.season .grid text, .season > svg > text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
-.season text { fill: var(--muted); font-size: 11px; font-family: var(--font); }
-.season .limit { stroke: var(--unhealthy); stroke-dasharray: 4 4; }
-.season rect.band-good { fill: var(--good); } .season rect.band-moderate { fill: var(--moderate); }
-.season rect.band-unhealthy { fill: var(--unhealthy); } .season rect.band-very { fill: var(--very); } .season rect.band-hazardous { fill: var(--hazardous); }
-.season figcaption { font-size: .92rem; color: var(--muted); padding: 8px 6px 0; max-width: 80ch; }
-.season figcaption strong { color: var(--ink); }
-
 .credits a { color: inherit; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
 .credits a:hover { text-decoration-color: currentColor; }
 
@@ -347,3 +336,60 @@ tbody tr:last-child > * { border-bottom: 0; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: .85rem; padding: 3px 10px 3px 8px; border-radius: 999px; background: color-mix(in srgb, var(--panel) 70%, transparent); color: var(--ink); }
 .live-dot { width: 8px; height: 8px; border-radius: 50%; background: #d23c2a; box-shadow: 0 0 0 0 rgba(210, 60, 42, .55); animation: live-pulse 2s ease-out infinite; }
 @keyframes live-pulse { 0% { box-shadow: 0 0 0 0 rgba(210, 60, 42, .55); } 70% { box-shadow: 0 0 0 8px rgba(210, 60, 42, 0); } 100% { box-shadow: 0 0 0 0 rgba(210, 60, 42, 0); } }
+
+/* ---------- v3: PSI + PM2.5 readouts, 24-hour trends, this year vs last year ---------- */
+.h1-sub { display: block; font-size: .55em; font-weight: 500; opacity: .8; font-variation-settings: "wdth" 100; margin-top: .25em; }
+.readouts { display: flex; gap: 10px 36px; flex-wrap: wrap; align-items: flex-end; margin: 10px 0 8px; }
+.ro { display: flex; flex-direction: column; }
+.ro-k { font-size: .9rem; font-weight: 650; }
+.ro-k small { color: inherit; opacity: .75; }
+.ro .psi-readout { margin: 2px 0 0; gap: 12px; }
+.ro-pm .psi-num, .pm-first .ro-psi .psi-num { font-size: clamp(3.6rem, 10vw, 6rem); }
+.pm-first .ro-pm .psi-num { font-size: clamp(6.5rem, 19vw, 12.5rem); }
+.ro-pm .psi-band, .pm-first .ro-psi .psi-band { font-size: .9rem; padding: 4px 11px 5px; }
+.psi-band[data-band] { background: var(--b); }
+.psi-band[data-band="good"] { --b: var(--good); } .psi-band[data-band="moderate"] { --b: var(--moderate); }
+.psi-band[data-band="unhealthy"] { --b: var(--unhealthy); color: #241b00; } .psi-band[data-band="very"] { --b: var(--very); color: #fff; }
+.psi-band[data-band="hazardous"] { --b: var(--hazardous); color: #fff; }
+.psi-band[data-band="good"], .psi-band[data-band="moderate"] { color: #fff; }
+
+.trend-tools { margin-bottom: 14px; }
+.trend-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.trend-panel h3 { font-size: 1rem; margin-bottom: 8px; }
+.trend-panel .meta { margin: 8px 2px 0; }
+.chart .hit circle { fill: transparent; }
+.chart .hit circle:hover { fill: var(--ink); fill-opacity: .25; }
+.chart circle.last { stroke: var(--panel); stroke-width: 2; }
+.chart circle.band-good { fill: var(--good); } .chart circle.band-moderate { fill: var(--moderate); }
+.chart circle.band-unhealthy { fill: var(--unhealthy); } .chart circle.band-very { fill: var(--very); } .chart circle.band-hazardous { fill: var(--hazardous); }
+.chart figcaption strong { color: var(--ink); font-size: 1.05rem; }
+
+.cmp-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 16px; }
+.cmp { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.cmp-k { font-size: .85rem; color: var(--muted); }
+.cmp-v strong { font-size: 2rem; font-weight: 800; font-variation-settings: "wdth" 70; font-variant-numeric: tabular-nums; }
+.cmp-prev { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cmp-y { font-size: .85rem; color: var(--muted); }
+.years-chart .limit { stroke: var(--unhealthy); stroke-dasharray: 4 4; }
+.years-chart .limit-t { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.yr path { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.yr text { font-size: 12px; font-weight: 700; font-family: var(--font); }
+.yr.y0 path { stroke: var(--ink); stroke-width: 2.8; } .yr.y0 text { fill: var(--ink); }
+.yr.y1 path { stroke: var(--yr-prev); } .yr.y1 text { fill: var(--yr-prev); }
+:root { --yr-prev: #8a96a3; }
+.key { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin: 0 6px 0 2px; border-radius: 2px; }
+.key.y0 { background: var(--ink); } .key.y1 { background: var(--yr-prev); margin-left: 14px; }
+
+@media (max-width: 900px) {
+  .trend-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .cmp-row { grid-template-columns: minmax(0, 1fr); }
+  .cmp { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+  .cmp-k { flex-basis: 100%; }
+}
+@media (max-width: 560px) {
+  .chart .axis text, .years-chart .limit-t { font-size: 17px; }
+  .chart .bands text { font-size: 15px; }
+  .yr text { font-size: 18px; }
+}

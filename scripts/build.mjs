@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, cpSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
@@ -23,6 +24,8 @@ const readJSON = (p, fb) => (existsSync(join(ROOT, p)) ? JSON.parse(readFileSync
 const curated = readJSON("data/updates.json", { background: [], news: [] });
 const live = readJSON("data/live.json", {});
 const history = readJSON("data/history.json", { psi: [], hotspots: [] });
+const lastYearData = readJSON("data/lastyear.json", null);
+const charts = createRequire(import.meta.url)(join(ROOT, "assets/charts.js"));
 const GENERATED = live.generatedAt || new Date().toISOString();
 const VER = GENERATED.replace(/\D/g, "").slice(0, 12);
 
@@ -76,7 +79,8 @@ const snap = psiVals.length
 
 // ---------- shared pieces ----------
 const PAGES = [
-  { path: "/", label: "Live PSI" },
+  { path: "/", label: "PSI live" },
+  { path: "/pm25/", label: "PM2.5 live" },
   { path: "/singapore-haze-policy/", label: "Singapore measures" },
   { path: "/indonesia-forest-fires/", label: "Indonesia fires" },
   { path: "/malaysia-haze/", label: "Malaysia" },
@@ -149,7 +153,6 @@ function layout({ path, title, description, body, jsonld = [], scripts = "", bod
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<link rel="preconnect" href="https://api-open.data.gov.sg" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
@@ -254,30 +257,82 @@ function hotspotTable() {
 </table>`;
 }
 
-function seasonChart() {
-  const d = history.psi || [];
-  if (d.length < 3) return "";
-  const W = 900, H = 230, L = 36, R = 8, T = 10, B = 30;
-  const yMax = Math.max(200, Math.ceil((Math.max(...d.map((x) => x.max)) + 10) / 50) * 50);
-  const bw = (W - L - R) / d.length;
-  const Y = (v) => T + (1 - v / yMax) * (H - T - B);
-  const grid = [];
-  for (let v = 0; v <= yMax; v += 50) grid.push(`<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`);
-  const bars = d
-    .map((x, i) => {
-      const bx = L + i * bw + 1, h = Y(0) - Y(x.max);
-      const lbl = i % 7 === 0 ? `<text x="${(bx + bw / 2).toFixed(1)}" y="${H - 10}" text-anchor="middle">${fmtDate(x.date).replace(/ \d{4}$/, "")}</text>` : "";
-      return `<rect class="band-${bandOf(x.max).key}" x="${bx.toFixed(1)}" y="${Y(x.max).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${h.toFixed(1)}"><title>${fmtDate(x.date)}: ${x.max}</title></rect>${lbl}`;
-    })
+// ---------- 24-hour PSI and PM2.5 trends ----------
+function trendBlock({ only } = {}) {
+  const t = live.trend || { psi: [], pm: [] };
+  const chips = ["max", ...charts.REGIONS]
+    .map((r) => `<button type="button" class="map-btn" data-region="${r}" aria-pressed="${r === "max"}">${charts.NAME[r]}</button>`)
     .join("");
-  const unhealthy = d.filter((x) => x.max > 100).length;
-  const peak = d.reduce((a, b) => (b.max > a.max ? b : a));
-  return `<figure class="season">
-<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily peak 24-hour PSI since ${fmtDate(d[0].date)}. Peak ${peak.max} on ${fmtDate(peak.date)}.">
-<g class="grid">${grid.join("")}</g><line class="limit" x1="${L}" x2="${W - R}" y1="${Y(100)}" y2="${Y(100)}"/>${bars}
-</svg>
-<figcaption><strong>${unhealthy} of ${d.length} days</strong> since ${fmtDate(d[0].date)} reached the unhealthy range (above 100) in at least one region. The season peak so far is <strong>${peak.max}</strong> on ${fmtDate(peak.date)}. Each bar is the highest regional 24-hour PSI of the day.</figcaption>
-</figure>`;
+  const fig = (kind, id, h, note) => `<div class="trend-panel">
+      <h3>${h}</h3>
+      <figure class="chart" id="${id}">${charts.svg(kind, t[kind], "max")}</figure>
+      <p class="meta">${note}</p>
+    </div>`;
+  const psiFig = fig("psi", "chart-psi", "24-hour PSI, last 24 hours", "NEA updates the 24-hour PSI every hour. It drives the official health advice.");
+  const pmFig = fig("pm", "chart-pm", "1-hour PM2.5, last 24 hours", "Hourly fine-particle concentration in µg/m³. Best for deciding what to do in the next hour.");
+  return `<div class="trend-tools map-tools" role="group" aria-label="Choose a region">${chips}</div>
+  <div class="trend-grid${only ? " single" : ""}">${only === "pm" ? pmFig + psiFig : psiFig + pmFig}</div>
+  <script type="application/json" id="trend-data">${JSON.stringify(t).replace(/</g, "\\u003c")}</script>`;
+}
+
+// ---------- this year vs last year (1 Sep – 31 Oct) ----------
+// This year: data/history.json (collected daily). Last year: data/lastyear.json (fetched once).
+function yearStats() {
+  const ly = lastYearData;
+  const thisYear = +GENERATED.slice(0, 4);
+  const inWin = (d) => d >= "09-01" && d <= "10-31";
+  const cur = (history.psi || []).filter((r) => r.date.startsWith(`${thisYear}-`) && inWin(r.date.slice(5))).map((r) => ({ d: r.date.slice(5), psi: r.max }));
+  const prev = ly && ly.year === thisYear - 1 ? (ly.days || []).filter((r) => r.psi != null && inWin(r.d)) : [];
+  if (cur.length < 3 || prev.length < 10) return null;
+  const cut = cur[cur.length - 1].d;
+  const sum = (rows) => {
+    const peak = rows.reduce((a, b) => (b.psi > a.psi ? b : a));
+    return { peak, over100: rows.filter((r) => r.psi > 100).length, avg: Math.round(rows.reduce((s, r) => s + r.psi, 0) / rows.length), days: rows.length };
+  };
+  return { thisYear, lastYear: thisYear - 1, cut, cur, prev, a: sum(cur), b: sum(prev.filter((r) => r.d <= cut)), bAll: sum(prev) };
+}
+
+function yearsBlock() {
+  const ys = yearStats();
+  if (!ys) return `<p class="muted">The comparison with last year appears here once enough daily readings are in.</p>`;
+  const { thisYear, lastYear, cut, cur, prev, a, b, bAll } = ys;
+  const cutLabel = fmtDate(`${thisYear}-${cut}`).replace(/ \d{4}$/, "");
+  const W = 900, H = 280, L = 38, R = 46, T = 12, B = 30;
+  const dayIdx = (d) => (Date.parse(`2001-${d}T00:00:00Z`) - Date.parse("2001-09-01T00:00:00Z")) / 864e5;
+  const N = dayIdx("10-31");
+  const yMax = Math.ceil((Math.max(150, a.peak.psi, bAll.peak.psi) + 10) / 50) * 50;
+  const X = (i) => L + (i / N) * (W - L - R);
+  const Y = (v) => T + (1 - v / yMax) * (H - T - B);
+  let grid = "", axis = "";
+  for (let v = 0; v <= yMax; v += 50) { grid += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`; axis += `<text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`; }
+  for (const [d, lbl] of [["09-01", "1 Sep"], ["09-15", "15 Sep"], ["10-01", "1 Oct"], ["10-15", "15 Oct"], ["10-31", "31 Oct"]]) {
+    const x = X(dayIdx(d)).toFixed(1);
+    grid += `<line x1="${x}" x2="${x}" y1="${T}" y2="${H - B}" opacity=".5"/>`;
+    axis += `<text x="${x}" y="${H - 10}" text-anchor="middle">${lbl}</text>`;
+  }
+  const line = (rows, cls, year) => {
+    const d = rows.map((r, i) => `${i ? "L" : "M"}${X(dayIdx(r.d)).toFixed(1)} ${Y(r.psi).toFixed(1)}`).join(" ");
+    const end = rows[rows.length - 1];
+    const dots = rows.map((r) => `<circle cx="${X(dayIdx(r.d)).toFixed(1)}" cy="${Y(r.psi).toFixed(1)}" r="6"><title>${fmtDate(`${year}-${r.d}`)}: ${r.psi}</title></circle>`).join("");
+    return `<g class="yr ${cls}"><path d="${d}"/><text x="${(X(dayIdx(end.d)) + 6).toFixed(1)}" y="${(Y(end.psi) + 4).toFixed(1)}">${year}</text><g class="hit">${dots}</g></g>`;
+  };
+  const diff = a.over100 - b.over100;
+  const lede = `From 1 Sep to ${cutLabel}, ${thisYear} had <strong>${a.over100} days</strong> with a 24-hour PSI above 100, against ${b.over100} in ${lastYear} by the same date${diff > 0 ? `, ${diff} more` : diff < 0 ? `, ${-diff} fewer` : ""}. This year's peak so far is <strong>${a.peak.psi}</strong> on ${fmtDate(`${thisYear}-${a.peak.d}`).replace(/ \d{4}$/, "")}; last year's whole-season peak was ${bAll.peak.psi}.`;
+  const stat = (k, v1, v2) => `<div class="cmp"><span class="cmp-k">${k}</span><span class="cmp-v"><strong>${v1}</strong> <span class="cmp-y">${thisYear}</span></span><span class="cmp-v cmp-prev">${v2} <span class="cmp-y">${lastYear}</span></span></div>`;
+  return `<p class="lede">${lede}</p>
+  <div class="cmp-row">
+    ${stat(`Days above 100, to ${cutLabel}`, a.over100, b.over100)}
+    ${stat(`Peak 24-hr PSI, to ${cutLabel}`, a.peak.psi, b.peak.psi)}
+    ${stat(`Average daily peak, to ${cutLabel}`, a.avg, b.avg)}
+  </div>
+  <figure class="chart years-chart">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Daily peak 24-hour PSI, 1 September to 31 October, ${thisYear} compared with ${lastYear}. ${thisYear} peak so far ${a.peak.psi}, ${lastYear} peak ${bAll.peak.psi}.">
+      <g class="grid">${grid}</g><g class="axis">${axis}</g>
+      <line class="limit" x1="${L}" x2="${W - R}" y1="${Y(100)}" y2="${Y(100)}"/><text class="limit-t" x="${L + 4}" y="${Y(100) - 5}">Unhealthy above 100</text>
+      ${line(prev, "y1", lastYear)}${line(cur, "y0", thisYear)}
+    </svg>
+    <figcaption><span class="key y0"></span>${thisYear} <span class="key y1"></span>${lastYear}. Each point is the day's highest regional 24-hour PSI from NEA.</figcaption>
+  </figure>`;
 }
 
 function hotspotTrend() {
@@ -298,7 +353,7 @@ const crumbs = (name, path) => ({
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
   itemListElement: [
-    { "@type": "ListItem", position: 1, name: "Live PSI", item: SITE + "/" },
+    { "@type": "ListItem", position: 1, name: "PSI live", item: SITE + "/" },
     { "@type": "ListItem", position: 2, name, item: SITE + path },
   ],
 });
@@ -315,21 +370,69 @@ const article = (headline, description, path) => ({
   publisher: { "@type": "Organization", name: NAME, logo: { "@type": "ImageObject", url: SITE + "/assets/apple-touch-icon.png" } },
 });
 
+// ---------- live snapshot sentences (also used in FAQ answers, meta and llms.txt) ----------
+const pmNow = now?.pm25_1h ? REGIONS.map((r) => now.pm25_1h[r]).filter((v) => typeof v === "number") : [];
+const pmSnap = pmNow.length
+  ? { max: Math.max(...pmNow), min: Math.min(...pmNow), hot: REGIONS.filter((r) => now.pm25_1h[r] === Math.max(...pmNow)).map((r) => RNAME[r]), ts: now.pm25_1h_timestamp || now.timestamp }
+  : null;
+const psiSentence = snap
+  ? `At ${fmtDT(now.timestamp)} SGT, Singapore's 24-hour PSI was ${snap.min}–${snap.max} (${snap.band.label.toLowerCase()}), highest in the ${snap.hot.join(" and ")}.`
+  : "";
+const pmSentence = pmSnap
+  ? `The 1-hour PM2.5 reading was ${pmSnap.min}–${pmSnap.max} µg/m³ at ${fmtDT(pmSnap.ts)} SGT, highest in the ${pmSnap.hot.join(" and ")} (${pmBand(pmSnap.max)}).`
+  : "";
+const yearSentence = (() => {
+  const ys = yearStats();
+  if (!ys) return "";
+  const cutLabel = fmtDate(`${ys.thisYear}-${ys.cut}`).replace(/ \d{4}$/, "");
+  return `From 1 Sep to ${cutLabel}, ${ys.thisYear} had ${ys.a.over100} days with a 24-hour PSI above 100 and a peak of ${ys.a.peak.psi}, compared with ${ys.b.over100} days and a peak of ${ys.b.peak.psi} over the same dates in ${ys.lastYear}.`;
+})();
+
 // ---------- FAQ ----------
 const FAQ = [
+  ...(snap ? [["What is the PSI in Singapore now?", `${psiSentence} The reading on this page updates live from NEA every 30 minutes.`]] : []),
+  ...(pmSnap ? [["What is the PM2.5 level in Singapore now?", `${pmSentence} NEA publishes a new 1-hour PM2.5 reading every hour.`]] : []),
   ["What is the PSI in Singapore?", "The Pollutant Standards Index is the air quality index used by Singapore's National Environment Agency. It combines six pollutants: PM2.5, PM10, ozone, carbon monoxide, sulphur dioxide and nitrogen dioxide. Each one gets a sub-index and the PSI is the highest of them. During haze, PM2.5 almost always sets the PSI."],
   ["What PSI level is unhealthy?", "A 24-hour PSI of 0 to 50 is good and 51 to 100 is moderate. 101 to 200 is unhealthy, 201 to 300 is very unhealthy, and anything above 300 is hazardous."],
   ["Should I look at the 24-hour PSI or the 1-hour PM2.5?", "Use the 24-hour PSI and NEA's forecast to plan the next day, and follow the health advice for that band. Use the 1-hour PM2.5 reading to decide on something you are about to do right now, such as a run."],
+  ...(yearSentence ? [["How does this year's haze compare with last year?", `${yearSentence} The chart on this page shows both years day by day.`]] : []),
   ["Is it safe to exercise outdoors during the haze?", "At an unhealthy PSI, healthy adults should cut down on long or strenuous outdoor exercise. Children, the elderly and pregnant women should keep it to a minimum, and people with heart or lung conditions should avoid it. At very unhealthy levels, everyone should avoid strenuous outdoor activity."],
   ["Do I need an N95 mask?", "Not for short exposure such as commuting or walking between buildings, or when you are indoors. An N95 mask helps if you must spend long periods outdoors when the PSI is unhealthy or worse. N95 masks are not designed for young children, and the elderly, pregnant women and people with heart or lung conditions should ask a doctor first."],
   ["When do schools close in Singapore because of haze?", "MOE considers closing schools when the next day's 24-hour PSI forecast is hazardous, above 300. In 2015, MOE primary and secondary schools, special education schools and kindergartens closed for one day. Every MOE classroom now has an air purifier."],
   ["Where does the haze come from?", "Mostly from forest and peatland fires in Indonesia, especially southern and central Sumatra and Kalimantan, many started to clear land. From August to October, south-easterly and southerly winds carry the smoke towards Singapore and Peninsular Malaysia."],
-  ["Why is the haze so bad in 2026?", "A very strong El Niño, sometimes called a Godzilla or super El Niño, and a positive Indian Ocean Dipole have made the region hotter and drier, so fires spread faster and burn longer. Forecasters expect the dry spell to end in late October or early November."],
   ["How often does this page update?", "Every 30 minutes. The PSI and PM2.5 readings are pulled straight from NEA in your browser, and the site itself rebuilds every 30 minutes with NEA's latest forecast, satellite hotspots, smoke haze areas and news headlines. NEA publishes new readings every hour."],
   ["How is the haze forecast on this page made?", "It takes hourly PM2.5 forecasts from the CAMS global atmospheric model (via Open-Meteo), scales them to match the latest NEA readings, and converts the result to the PSI scale. It is an estimate, not an official forecast. NEA's daily advisory is the official one."],
 ];
-const faqHtml = `<div class="faq">${FAQ.map(([q, a]) => `<details><summary><h3>${esc(q)}</h3></summary><p>${esc(a)}</p></details>`).join("")}</div>`;
-const faqLd = { "@context": "https://schema.org", "@type": "FAQPage", mainEntity: FAQ.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) };
+const PM_FAQ = [
+  ...(pmSnap ? [["What is the PM2.5 level in Singapore now?", `${pmSentence} This page updates live from NEA every 30 minutes.`]] : []),
+  ["What is PM2.5?", "PM2.5 is fine particulate matter 2.5 micrometres across or smaller, about thirty times thinner than a human hair. It gets deep into the lungs and bloodstream. Smoke from peat and forest fires is mostly PM2.5, so it is the pollutant that rises fastest during haze."],
+  ["What is a safe PM2.5 level in Singapore?", "NEA's 1-hour PM2.5 bands are: Band I Normal 0–55 µg/m³, Band II Elevated 56–150, Band III High 151–250 and Band IV Very high above 250. Band I is fine for normal activity. In Band II and above, reduce strenuous outdoor activity, especially if you are sensitive to haze."],
+  ["What is the difference between 1-hour PM2.5 and 24-hour PSI?", "The 1-hour PM2.5 shows how much fine particulate is in the air this hour, so it reacts quickly when smoke drifts in or clears. The 24-hour PSI averages over a day and covers six pollutants. NEA's health advice is based on the 24-hour PSI, while the 1-hour PM2.5 is for deciding on activities in the next few hours."],
+  ["How is 24-hour PM2.5 turned into PSI?", "NEA converts the 24-hour average PM2.5 into a sub-index: 12 µg/m³ is a PSI of 50, 55 µg/m³ is 100, 150 µg/m³ is 200, 250 µg/m³ is 300 and 350 µg/m³ is 400. The PSI is the highest of the six pollutant sub-indices, which during haze is almost always PM2.5."],
+  ["Do air purifiers help with PM2.5?", "Yes. A purifier with a true HEPA filter, sized for the room and run with windows and doors closed, removes most PM2.5 indoors. Fans and air conditioners that only recirculate air do not filter particles unless they have a suitable filter."],
+];
+const faqHtml = (list) => `<div class="faq">${list.map(([q, a]) => `<details><summary><h3>${esc(q)}</h3></summary><p>${esc(a)}</p></details>`).join("")}</div>`;
+const faqLd = (list) => ({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: list.map(([q, a]) => ({ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: a } })) });
+
+const datasetLd = (path) => ({
+  "@context": "https://schema.org",
+  "@type": "Dataset",
+  name: "Singapore live PSI and PM2.5 readings by region",
+  description: "24-hour PSI, 1-hour PM2.5, 24-hour PM2.5, PM10 and ozone for the North, South, East, West and Central regions of Singapore, refreshed every 30 minutes from the National Environment Agency, with a comparison of this haze season against last year.",
+  url: SITE + path,
+  isAccessibleForFree: true,
+  license: "https://data.gov.sg/open-data-licence",
+  creator: { "@type": "Organization", name: "National Environment Agency", url: "https://www.nea.gov.sg/" },
+  publisher: { "@type": "Organization", name: NAME, url: SITE },
+  
+  dateModified: GENERATED,
+  spatialCoverage: { "@type": "Place", name: "Singapore", geo: { "@type": "GeoCoordinates", latitude: 1.3521, longitude: 103.8198 } },
+  variableMeasured: ["24-hour PSI", "1-hour PM2.5", "24-hour PM2.5", "24-hour PM10", "8-hour ozone"],
+  distribution: [
+    { "@type": "DataDownload", encodingFormat: "application/json", contentUrl: SITE + "/data/live.json" },
+    { "@type": "DataDownload", encodingFormat: "application/json", contentUrl: SITE + "/data/history.json" },
+  ],
+});
 
 const HEALTH_TABLE = `<div class="table-wrap"><table class="health">
 <caption>NEA health advice by 24-hour PSI (summarised)</caption>
@@ -342,74 +445,110 @@ const HEALTH_TABLE = `<div class="table-wrap"><table class="health">
 </tbody></table></div>
 <p class="meta">Anyone feeling unwell, especially the elderly, children and people with chronic heart or lung disease, should see a doctor. Full guidance: <a href="https://www.haze.gov.sg/" rel="noopener">haze.gov.sg</a>.</p>`;
 
-const mapScript = `<script src="/assets/map.js?v=${VER}" defer></script>`;
+const PM_TABLE = `<div class="table-wrap"><table class="pm-bands health">
+    <caption>NEA 1-hour PM2.5 bands</caption>
+    <thead><tr><th scope="col">Band</th><th scope="col">1-hr PM2.5 (µg/m³)</th><th scope="col">What to do in the next hour or so</th></tr></thead>
+    <tbody>
+      <tr class="b-good"><th scope="row"><span class="dot"></span>I Normal</th><td>0–55</td><td>Normal activities</td></tr>
+      <tr class="b-unhealthy"><th scope="row"><span class="dot"></span>II Elevated</th><td>56–150</td><td>Consider cutting back strenuous outdoor activity, especially sensitive groups</td></tr>
+      <tr class="b-very"><th scope="row"><span class="dot"></span>III High</th><td>151–250</td><td>Move strenuous activity indoors. Sensitive groups stay inside</td></tr>
+      <tr class="b-hazardous"><th scope="row"><span class="dot"></span>IV Very high</th><td>251 and above</td><td>Everyone stays indoors where possible</td></tr>
+    </tbody>
+  </table></div>`;
 
-// ---------- Home ----------
-function home() {
-  const title = "Singapore PSI & Haze Today: Live Air Quality and Forecast";
-  const description = "Live 24-hour PSI and PM2.5 for all five regions of Singapore, refreshed every 30 minutes, plus a 3-day haze forecast, fire hotspot map and NEA advisories.";
-  const hs = live.hotspots;
-  const regionTile = (r) => {
-    const v = now?.psi?.[r];
-    const b = typeof v === "number" ? bandOf(v) : null;
-    const pm = now?.pm25_1h?.[r];
-    return `<div class="reg reg-${r}" data-region="${r}"${b ? ` data-band="${b.key}"` : ""}>
-        <span class="reg-name">${RNAME[r]}</span>
-        <span class="reg-psi">${v ?? "–"}</span>
-        <span class="reg-pm">PM2.5 ${pm ?? "–"}</span>
-      </div>`;
-  };
+const mapScript = `<script src="/assets/map.js?v=${VER}" defer></script>`;
+const liveScripts = `<script src="/assets/live.js?v=${VER}" defer></script>\n<script src="/assets/charts.js?v=${VER}" defer></script>\n<script src="/assets/app.js?v=${VER}" defer></script>`;
+const PM_ADVICE = {
+  "Band I Normal": "PM2.5 is in the normal band this hour. Outdoor plans are fine.",
+  "Band II Elevated": "PM2.5 is elevated this hour. Consider a shorter or easier session outdoors, especially if you are sensitive to haze.",
+  "Band III High": "PM2.5 is high this hour. Move strenuous activity indoors, and sensitive groups should stay inside.",
+  "Band IV Very high": "PM2.5 is very high this hour. Stay indoors with windows closed and an air purifier on if you have one.",
+};
+const pmKey = (v) => (v <= 55 ? "good" : v <= 150 ? "unhealthy" : v <= 250 ? "very" : "hazardous");
+
+function readingsTable() {
   const rows = now
     ? REGIONS.slice()
         .sort((a, b) => now.psi[b] - now.psi[a])
         .map((k) => {
           const bb = bandOf(now.psi[k]), p1 = now.pm25_1h?.[k];
-          return `<tr><th scope="row">${RNAME[k]}</th><td><span class="pill ${bb.key}">${now.psi[k]}</span> <span class="pm-tag">${bb.label}</span></td><td>${p1 != null ? `${p1}<span class="pm-tag">${pmBand(p1)}</span>` : "–"}</td><td>${now.pm25_24h?.[k] ?? "–"}</td><td>${now.pm10_24h?.[k] ?? "–"}</td><td>${now.o3_8h?.[k] ?? "–"}</td></tr>`;
+          return `<tr><th scope="row">${RNAME[k]}</th><td><span class="pill ${bb.key}">${now.psi[k]}</span> <span class="pm-tag">${bb.label}</span></td><td>${p1 != null ? `<span class="pill ${pmKey(p1)}">${p1}</span> <span class="pm-tag">${pmBand(p1)}</span>` : "–"}</td><td>${now.pm25_24h?.[k] ?? "–"}</td><td>${now.pm10_24h?.[k] ?? "–"}</td><td>${now.o3_8h?.[k] ?? "–"}</td></tr>`;
         })
         .join("")
     : `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
+  return `<div class="table-wrap"><table class="readings" id="readings">
+    <thead><tr><th scope="col">Region</th><th scope="col">24-hr PSI</th><th scope="col">1-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM10 <small>µg/m³</small></th><th scope="col">8-hr O₃ <small>µg/m³</small></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
 
-  const summary = snap
-    ? `At ${fmtDT(now.timestamp)}, the 24-hour PSI ranged from ${snap.min} to ${snap.max} across Singapore, in the ${snap.band.label.toLowerCase()} range${live.advisory?.forecastBand ? `, and NEA forecasts it to be ${live.advisory.forecastBand.toLowerCase()} over the next 24 hours` : ""}.${hs ? ` NEA's latest satellite pass found ${num(hs.total)} hotspots in the region, ${num(hs.byRegion.find((r) => r.name === "Kalimantan")?.count || 0)} in Kalimantan and ${num(hs.byRegion.find((r) => r.name === "Sumatra")?.count || 0)} in Sumatra.` : ""}`
-    : "";
-
-  const body = `
-<section class="hero" id="now" aria-labelledby="h1">
+// hero for both live pages; lead = "psi" or "pm"
+function hero(lead) {
+  const isPm = lead === "pm";
+  const regionTile = (r) => {
+    const v = now?.psi?.[r], pm = now?.pm25_1h?.[r];
+    const big = isPm ? pm : v;
+    const key = isPm ? (pm != null ? pmKey(pm) : "") : typeof v === "number" ? bandOf(v).key : "";
+    return `<div class="reg reg-${r}" data-region="${r}"${key ? ` data-band="${key}"` : ""}>
+        <span class="reg-name">${RNAME[r]}</span>
+        <span class="reg-psi">${big ?? "–"}</span>
+        <span class="reg-pm">${isPm ? `PSI ${v ?? "–"}` : `PM2.5 ${pm ?? "–"}`}</span>
+      </div>`;
+  };
+  const psiRO = `<div class="ro ro-psi">
+        <span class="ro-k">24-hr PSI <small>highest region</small></span>
+        <div class="psi-readout"><span class="psi-num" id="psi-max">${snap ? snap.max : "–"}</span><span class="psi-band" id="psi-band"${snap ? ` data-band="${snap.band.key}"` : ""}>${snap ? snap.band.label : "Loading"}</span></div>
+      </div>`;
+  const pmRO = `<div class="ro ro-pm">
+        <span class="ro-k">1-hr PM2.5 <small>µg/m³, highest region</small></span>
+        <div class="psi-readout"><span class="psi-num" id="pm-max">${pmSnap ? pmSnap.max : "–"}</span><span class="psi-band" id="pm-band"${pmSnap ? ` data-band="${pmKey(pmSnap.max)}"` : ""}>${pmSnap ? pmBand(pmSnap.max) : "Loading"}</span></div>
+      </div>`;
+  const stampText = isPm
+    ? pmSnap ? `Highest 1-hr PM2.5 in ${pmSnap.hot.join(" and ")}. NEA reading for ${fmtDT(pmSnap.ts)}.` : "Waiting for data"
+    : snap ? `${snap.hot.join(" and ")} highest. Island range ${snap.min}–${snap.max}. NEA reading for ${fmtDT(now.timestamp)}.` : "Waiting for data";
+  return `<section class="hero" id="now" aria-labelledby="h1">
   <div class="sky" aria-hidden="true"><div class="haze-layer"></div>${skyline}</div>
   <div class="hero-inner">
     <div class="hero-main">
-      <h1 id="h1">Singapore air quality today</h1>
-      <p class="hero-sub">Highest 24-hour PSI across the island right now</p>
-      <div class="psi-readout" aria-live="polite">
-        <span class="psi-num" id="psi-max">${snap ? snap.max : "–"}</span>
-        <span class="psi-band" id="psi-band">${snap ? snap.band.label : "Loading NEA readings"}</span>
-      </div>
-      <p class="advice" id="psi-advice">${snap ? ADVICE[snap.band.key] : "Readings load from the National Environment Agency every 30 minutes."}</p>
-      <p class="stamp"><span class="live" title="Readings update automatically every 30 minutes"><span class="live-dot" aria-hidden="true"></span>Live</span> <span id="psi-time">${snap ? `${snap.hot.join(" and ")} highest. Island range ${snap.min}–${snap.max}. NEA reading for ${fmtDT(now.timestamp)}.` : "Waiting for data"}</span> <span id="last-refresh" class="muted">Last refreshed ${fmtDT(GENERATED)}</span></p>
+      <h1 id="h1">${isPm ? "Singapore PM2.5 live" : "Singapore PSI live"} <span class="h1-sub">${isPm ? "1-hour PM2.5 and PSI now" : "PSI and PM2.5 readings now"}</span></h1>
+      <div class="readouts${isPm ? " pm-first" : ""}" aria-live="polite">${isPm ? pmRO + psiRO : psiRO + pmRO}</div>
+      <p class="advice" id="${isPm ? "pm-advice" : "psi-advice"}">${isPm ? (pmSnap ? PM_ADVICE[pmBand(pmSnap.max)] : "Readings load from NEA every 30 minutes.") : snap ? ADVICE[snap.band.key] : "Readings load from the National Environment Agency every 30 minutes."}</p>
+      <p class="stamp"><span class="live" title="Readings update automatically every 30 minutes"><span class="live-dot" aria-hidden="true"></span>Live</span> <span id="psi-time">${stampText}</span> <span id="last-refresh" class="muted">Last refreshed ${fmtDT(GENERATED)}</span></p>
     </div>
-    <div class="compass" id="regions" aria-label="24-hour PSI by region">
+    <div class="compass" id="regions" aria-label="${isPm ? "1-hour PM2.5" : "24-hour PSI"} by region">
       ${REGIONS.map(regionTile).join("")}
     </div>
   </div>
-</section>
+</section>`;
+}
+
+// ---------- Home ----------
+function home() {
+  const title = "Singapore PSI Live Now: PSI & PM2.5 Today, Every 30 Min";
+  const description = `Live Singapore PSI and PM2.5 now for North, South, East, West and Central${snap ? ` (24-hr PSI ${snap.min}–${snap.max}, ${snap.band.label.toLowerCase()})` : ""}. 24-hour trends, haze forecast and this year vs last year.`;
+  const hs = live.hotspots;
+  const summary = snap
+    ? `${psiSentence} ${pmSentence}${live.advisory?.forecastBand ? ` NEA forecasts the 24-hour PSI to be ${live.advisory.forecastBand.toLowerCase()} over the next 24 hours.` : ""}${hs ? ` NEA's latest satellite pass found ${num(hs.total)} hotspots in the region, ${num(hs.byRegion.find((r) => r.name === "Kalimantan")?.count || 0)} in Kalimantan and ${num(hs.byRegion.find((r) => r.name === "Sumatra")?.count || 0)} in Sumatra.` : ""}`
+    : "";
+  const thisYear = +GENERATED.slice(0, 4);
+
+  const body = `
+${hero("psi")}
 
 <section class="block" aria-labelledby="h-table">
   <div class="block-head">
-    <h2 id="h-table">Readings by region</h2>
-    <p>24-hour PSI drives NEA's health advice. 1-hour PM2.5 shows what the air is like this hour.</p>
+    <h2 id="h-table">PSI and PM2.5 by region now</h2>
+    <p>24-hour PSI drives NEA's health advice. 1-hour PM2.5 shows what the air is like this hour. <a href="/pm25/">PM2.5 live page</a></p>
   </div>
-  <div class="table-wrap"><table class="readings" id="readings">
-    <thead><tr><th scope="col">Region</th><th scope="col">24-hr PSI</th><th scope="col">1-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM10 <small>µg/m³</small></th><th scope="col">8-hr O₃ <small>µg/m³</small></th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>
+  ${readingsTable()}
 </section>
 
 <section class="block" aria-labelledby="h-trend">
   <div class="block-head">
-    <h2 id="h-trend">PSI over the last 24 hours and the next 3 days</h2>
-    <p>Solid line: highest regional 24-hour PSI reported by NEA. Dashed line: our model estimate. Shaded bands mark the PSI categories.</p>
+    <h2 id="h-trend">PSI and PM2.5 trend, last 24 hours</h2>
+    <p>Hourly NEA readings. Pick a region to see its own line. Shaded bands mark the official categories.</p>
   </div>
-  <figure class="chart" id="chart"><div class="chart-empty muted">Loading chart…</div></figure>
+  ${trendBlock()}
 </section>
 
 <section class="block two" aria-labelledby="h-forecast">
@@ -428,19 +567,20 @@ function home() {
   </div>
 </section>
 
+<section class="block" aria-labelledby="h-years">
+  <div class="block-head">
+    <h2 id="h-years">${thisYear} haze vs ${thisYear - 1}</h2>
+    <p>Daily peak 24-hour PSI over the same 1 September to 31 October window.</p>
+  </div>
+  ${yearsBlock()}
+</section>
+
 <section class="block" aria-labelledby="h-map">
   <div class="block-head">
     <h2 id="h-map">Fires and smoke around Singapore</h2>
     <p>Satellite hotspots and smoke haze areas mapped by NEA, refreshed every 30 minutes. Winds from the south and south-east carry this smoke to Singapore.</p>
   </div>
   ${mapBlock("region")}
-</section>
-
-<section class="block" aria-labelledby="h-season">
-  <div class="block-head">
-    <h2 id="h-season">PSI this haze season</h2>
-  </div>
-  ${seasonChart()}
 </section>
 
 <section class="block" aria-labelledby="h-situation">
@@ -460,35 +600,22 @@ function home() {
     <p>Updated every 30 minutes from news across the region.</p>
   </div>
   <div class="hl-cols">
-    <div><h3>Singapore</h3>${headlineList("sg", 5)}</div>
-    <div><h3>Indonesia</h3>${headlineList("id", 5)}</div>
-    <div><h3>Malaysia</h3>${headlineList("my", 5)}</div>
+    <div><h3>Singapore</h3>${headlineList("sg", 4)}</div>
+    <div><h3>Indonesia</h3>${headlineList("id", 4)}</div>
+    <div><h3>Malaysia</h3>${headlineList("my", 4)}</div>
   </div>
 </section>
 
-<section class="block" aria-labelledby="h-events">
-  <div class="block-head"><h2 id="h-events">Key events</h2></div>
-  ${keyEvents(curated.news.slice().sort(byDateDesc).slice(0, 6), { showRegion: true })}
-</section>
-
 <section class="block" aria-labelledby="h-health">
-  <div class="block-head"><h2 id="h-health">What to do at each PSI level</h2></div>
+  <div class="block-head"><h2 id="h-health">What to do at each PSI and PM2.5 level</h2></div>
   ${HEALTH_TABLE}
   <h3 class="sub">1-hour PM2.5 bands</h3>
-  <div class="table-wrap"><table class="pm-bands">
-    <thead><tr><th scope="col">Band</th><th scope="col">1-hr PM2.5 (µg/m³)</th><th scope="col">Use it for</th></tr></thead>
-    <tbody>
-      <tr><th scope="row">I Normal</th><td>0–55</td><td rowspan="4">Deciding on activities in the next hour or so</td></tr>
-      <tr><th scope="row">II Elevated</th><td>56–150</td></tr>
-      <tr><th scope="row">III High</th><td>151–250</td></tr>
-      <tr><th scope="row">IV Very high</th><td>251 and above</td></tr>
-    </tbody>
-  </table></div>
+  ${PM_TABLE}
 </section>
 
 <section class="block" aria-labelledby="h-faq">
-  <div class="block-head"><h2 id="h-faq">Haze questions</h2></div>
-  ${faqHtml}
+  <div class="block-head"><h2 id="h-faq">PSI and haze questions</h2></div>
+  ${faqHtml(FAQ)}
 </section>`;
 
   return layout({
@@ -497,9 +624,9 @@ function home() {
     description,
     body,
     bodyAttrs: `class="home"${snap ? ` data-band="${snap.band.key}"` : ""}`,
-    scripts: `<script src="/assets/live.js?v=${VER}" defer></script>\n<script src="/assets/app.js?v=${VER}" defer></script>\n${mapScript}`,
+    scripts: `${liveScripts}\n${mapScript}`,
     jsonld: [
-      { "@context": "https://schema.org", "@type": "WebSite", name: NAME, alternateName: "sgairquality.com", url: SITE + "/", inLanguage: "en-SG" },
+      { "@context": "https://schema.org", "@type": "WebSite", name: NAME, alternateName: ["sgairquality.com", "SG PSI live"], url: SITE + "/", inLanguage: "en-SG" },
       {
         "@context": "https://schema.org",
         "@type": "WebPage",
@@ -507,10 +634,61 @@ function home() {
         description,
         url: SITE + "/",
         dateModified: GENERATED,
-        about: [{ "@type": "Thing", name: "Air pollution in Singapore" }, { "@type": "Thing", name: "Southeast Asian haze" }],
-        spatialCoverage: { "@type": "Place", name: "Singapore", geo: { "@type": "GeoCoordinates", latitude: 1.3521, longitude: 103.8198 } },
+        about: [{ "@type": "Thing", name: "Pollutant Standards Index" }, { "@type": "Thing", name: "PM2.5" }, { "@type": "Thing", name: "Southeast Asian haze" }],
+        speakable: { "@type": "SpeakableSpecification", cssSelector: ["#h1", "#psi-time", ".advice"] },
       },
-      faqLd,
+      datasetLd("/"),
+      faqLd(FAQ),
+    ],
+  });
+}
+
+// ---------- PM2.5 live ----------
+function pm25() {
+  const path = "/pm25/";
+  const title = "Singapore PM2.5 Live Now: 1-Hour PM2.5 by Region Today";
+  const description = `Live 1-hour PM2.5 in Singapore now${pmSnap ? ` (${pmSnap.min}–${pmSnap.max} µg/m³)` : ""} for North, South, East, West and Central, updated every 30 minutes from NEA, with a 24-hour PM2.5 trend and band guide.`;
+  const body = `
+${hero("pm")}
+
+<section class="block" aria-labelledby="h-trend">
+  <div class="block-head">
+    <h2 id="h-trend">PM2.5 trend, last 24 hours</h2>
+    <p>Hourly NEA readings in µg/m³. Pick a region to see its own line. Shaded bands mark NEA's PM2.5 bands.</p>
+  </div>
+  ${trendBlock({ only: "pm" })}
+</section>
+
+<section class="block" aria-labelledby="h-table">
+  <div class="block-head">
+    <h2 id="h-table">PM2.5 and PSI by region now</h2>
+    <p>${esc(pmSentence)} <a href="/">PSI live page</a></p>
+  </div>
+  ${readingsTable()}
+</section>
+
+<section class="block" aria-labelledby="h-bands">
+  <div class="block-head"><h2 id="h-bands">What the PM2.5 bands mean</h2></div>
+  ${PM_TABLE}
+  <p class="meta">NEA's health advice for the next day is based on the 24-hour PSI. <a href="/#h-health">PSI health advice</a></p>
+</section>
+
+<section class="block" aria-labelledby="h-faq">
+  <div class="block-head"><h2 id="h-faq">PM2.5 questions</h2></div>
+  ${faqHtml(PM_FAQ)}
+</section>`;
+  return layout({
+    path,
+    title,
+    description,
+    body,
+    bodyAttrs: `class="home pm-page"${pmSnap ? ` data-band="${pmKey(pmSnap.max)}"` : ""}`,
+    scripts: liveScripts,
+    jsonld: [
+      { "@context": "https://schema.org", "@type": "WebPage", name: title, description, url: SITE + path, dateModified: GENERATED, about: [{ "@type": "Thing", name: "PM2.5" }, { "@type": "Thing", name: "Air pollution in Singapore" }] },
+      datasetLd(path),
+      crumbs("PM2.5 live", path),
+      faqLd(PM_FAQ),
     ],
   });
 }
@@ -523,7 +701,7 @@ function policy() {
   const body = `
 <article class="page">
   <header class="page-head">
-    <p class="crumb"><a href="/">Live PSI</a> <span aria-hidden="true">/</span> Singapore measures</p>
+    <p class="crumb"><a href="/">PSI live</a> <span aria-hidden="true">/</span> Singapore measures</p>
     <h1>Singapore haze measures and policy, 2026</h1>
     <p class="lede">What the government has announced, what kicks in at each PSI level, and where to find official updates. NEA's outlook and the headlines below refresh every 30 minutes.</p>
   </header>
@@ -568,7 +746,7 @@ function indonesia() {
   const body = `
 <article class="page">
   <header class="page-head">
-    <p class="crumb"><a href="/">Live PSI</a> <span aria-hidden="true">/</span> Indonesia fires</p>
+    <p class="crumb"><a href="/">PSI live</a> <span aria-hidden="true">/</span> Indonesia fires</p>
     <h1>Indonesia forest fires and hotspots, 2026</h1>
     <p class="lede">Most of the haze over Singapore comes from forest and peatland fires in Sumatra and Kalimantan. The map, counts and headlines on this page refresh every 30 minutes.</p>
   </header>
@@ -611,7 +789,7 @@ function malaysia() {
   const body = `
 <article class="page">
   <header class="page-head">
-    <p class="crumb"><a href="/">Live PSI</a> <span aria-hidden="true">/</span> Malaysia</p>
+    <p class="crumb"><a href="/">PSI live</a> <span aria-hidden="true">/</span> Malaysia</p>
     <h1>Malaysia haze, 2026</h1>
     <p class="lede">The same smoke that reaches Singapore is affecting Peninsular Malaysia and Sarawak. Headlines refresh every 30 minutes.</p>
   </header>
@@ -652,10 +830,11 @@ rmSync(DIST, { recursive: true, force: true });
 mkdirSync(DIST, { recursive: true });
 for (const f of ["assets", "robots.txt", "site.webmanifest", "CNAME"]) if (existsSync(join(ROOT, f))) cpSync(join(ROOT, f), join(DIST, f), { recursive: true });
 mkdirSync(join(DIST, "data"), { recursive: true });
-for (const f of ["live.json", "history.json", "updates.json"]) if (existsSync(join(ROOT, "data", f))) cpSync(join(ROOT, "data", f), join(DIST, "data", f));
+for (const f of ["live.json", "history.json", "updates.json", "lastyear.json"]) if (existsSync(join(ROOT, "data", f))) cpSync(join(ROOT, "data", f), join(DIST, "data", f));
 writeFileSync(join(DIST, ".nojekyll"), "");
 
 write("index.html", home());
+write("pm25/index.html", pm25());
 write("singapore-haze-policy/index.html", policy());
 write("indonesia-forest-fires/index.html", indonesia());
 write("malaysia-haze/index.html", malaysia());
@@ -666,7 +845,7 @@ write(
   "sitemap.xml",
   `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${PAGES.map((p) => `  <url><loc>${SITE}${p.path}</loc><lastmod>${lastmod}</lastmod><changefreq>${p.path === "/" ? "hourly" : "daily"}</changefreq><priority>${p.path === "/" ? "1.0" : "0.8"}</priority></url>`).join("\n")}
+${PAGES.map((p) => { const liveP = p.path === "/" || p.path === "/pm25/"; return `  <url><loc>${SITE}${p.path}</loc><lastmod>${liveP ? GENERATED.slice(0, 19) + "Z" : lastmod}</lastmod><changefreq>${liveP ? "hourly" : "daily"}</changefreq><priority>${p.path === "/" ? "1.0" : liveP ? "0.9" : "0.7"}</priority></url>`; }).join("\n")}
 </urlset>
 `
 );
@@ -674,19 +853,24 @@ write(
   "llms.txt",
   `# SG Air Quality (sgairquality.com)
 
-> Independent tracker of Singapore's air quality during the 2026 Southeast Asian haze. Live 24-hour PSI and 1-hour PM2.5 for Singapore's five regions, NEA's 24-hour forecast, a 3-day model PSI estimate, a map of NEA fire hotspots and smoke haze, and regional headlines. Everything refreshes every 30 minutes.
+> Independent live tracker of Singapore's air quality: live 24-hour PSI and 1-hour PM2.5 for the North, South, East, West and Central regions (refreshed every 30 minutes from NEA), 24-hour PSI and PM2.5 trends, a haze forecast, a comparison of this haze season with last year, and a map of fire hotspots and smoke haze.
 
-${snap ? `Latest: 24-hour PSI ${snap.min}–${snap.max} (${snap.band.label}) at ${fmtDT(now.timestamp)} SGT. NEA 24-hour forecast: ${live.advisory?.forecastBand || "n/a"}.` : ""}
+${psiSentence}
+${pmSentence}
+${live.advisory?.forecastBand ? `NEA 24-hour PSI forecast: ${live.advisory.forecastBand}.` : ""}
+${yearSentence}
 
 ## Pages
-- [Live PSI and forecast](${SITE}/): live readings, PSI trend, haze forecast, hotspot map, season history, FAQ
+- [Singapore PSI live](${SITE}/): live PSI and PM2.5 by region, 24-hour trends, haze forecast, this year vs last year, hotspot map, FAQ
+- [Singapore PM2.5 live](${SITE}/pm25/): live 1-hour PM2.5 by region, 24-hour PM2.5 trend, NEA PM2.5 bands
 - [Singapore haze measures](${SITE}/singapore-haze-policy/): Haze Task Force actions, N95 masks, MOE and MOM rules
 - [Indonesia forest fires](${SITE}/indonesia-forest-fires/): hotspot map and counts by area, causes, El Niño
 - [Malaysia haze](${SITE}/malaysia-haze/): API thresholds, school closures, Sarawak emergency
 
 ## Data (JSON)
-- [live.json](${SITE}/data/live.json): PSI snapshot, NEA advisory, hotspots, haze areas, headlines (every 30 min)
+- [live.json](${SITE}/data/live.json): PSI and PM2.5 snapshot, last 24 hours by region, NEA advisory, hotspots, haze areas, headlines (every 30 min)
+- [lastyear.json](${SITE}/data/lastyear.json): last year's daily peak 24-hour PSI, 1 Sep to 31 Oct
 - [history.json](${SITE}/data/history.json): daily peak PSI and hotspot totals this season
-`
+`.replace(/\n{3,}/g, "\n\n")
 );
 console.log("built dist/ from data generated", GENERATED);
