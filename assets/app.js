@@ -364,12 +364,81 @@
       tools.querySelectorAll("[data-range]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
       document.querySelectorAll("[data-range-view]").forEach((v) => { v.hidden = v.dataset.rangeView !== n; });
       document.querySelectorAll("[data-range-note]").forEach((v) => { v.hidden = v.dataset.rangeNote !== n; });
+      hideTip();
     });
+  }
+
+  // ---------- chart tooltips (24-hour trends and this year vs last year) ----------
+  // Each chart carries one empty <g class="pt"> per reading with data-x, data-y ("y~class|..."),
+  // data-t (title) and data-l ("class~label~value~note|..."). One handler serves every chart,
+  // so it keeps working after a chart is redrawn. Works with a mouse, a pen or a finger.
+  const SVGNS = "http://www.w3.org/2000/svg";
+  let tipFor = null;
+  function hideTip() {
+    if (!tipFor) return;
+    tipFor.svg.querySelector(".hover")?.remove();
+    tipFor.tip.hidden = true;
+    tipFor = null;
+  }
+  function showTip(svg, e) {
+    const pts = svg.querySelectorAll(".pt");
+    const ctm = svg.getScreenCTM();
+    if (!pts.length || !ctm) return hideTip();
+    const sx = (e.clientX - ctm.e) / ctm.a;
+    let best = null, bd = Infinity;
+    for (const p of pts) { const d = Math.abs(+p.dataset.x - sx); if (d < bd) { bd = d; best = p; } }
+    if (!best) return hideTip();
+    const fig = svg.closest("figure");
+    if (tipFor && tipFor.svg !== svg) hideTip();
+    let tip = fig.querySelector(".chart-tip");
+    if (!tip) { tip = document.createElement("div"); tip.className = "chart-tip"; tip.setAttribute("role", "status"); fig.appendChild(tip); }
+    tipFor = { svg, tip };
+
+    // guide line and highlighted points, drawn in the chart's own coordinates
+    let g = svg.querySelector(".hover");
+    if (!g) { g = document.createElementNS(SVGNS, "g"); g.setAttribute("class", "hover"); svg.appendChild(g); }
+    const x = +best.dataset.x;
+    const area = svg.querySelector(".hit-area");
+    const y0 = area ? +area.getAttribute("y") : 0, y1 = area ? y0 + +area.getAttribute("height") : 0;
+    g.innerHTML = `<line x1="${x}" x2="${x}" y1="${y0}" y2="${y1}"/>` +
+      (best.dataset.y || "").split("|").filter(Boolean).map((v) => { const [y, c] = v.split("~"); return `<circle class="${c}" cx="${x}" cy="${y}" r="5.5"/>`; }).join("");
+
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    tip.innerHTML = `<p class="tip-t">${esc(best.dataset.t || "")}</p>` +
+      (best.dataset.l || "").split("|").filter(Boolean).map((l) => {
+        const [c, label, value, note] = l.split("~");
+        return `<p class="tip-l"><span class="sw ${esc(c)}"></span>${esc(label)} <strong>${esc(value)}</strong>${note ? ` <span class="tip-n">${esc(note)}</span>` : ""}</p>`;
+      }).join("");
+    tip.hidden = false;
+
+    // place it beside the guide line, flipping to the left near the right edge
+    const fr = fig.getBoundingClientRect();
+    const px = ctm.a * x + ctm.e - fr.left;
+    const py = Math.max(8, Math.min(e.clientY - fr.top - tip.offsetHeight - 14, fr.height - tip.offsetHeight - 8));
+    const left = px + 14 + tip.offsetWidth > fr.width - 6 ? px - 14 - tip.offsetWidth : px + 14;
+    tip.style.left = `${Math.max(6, left)}px`;
+    tip.style.top = `${py}px`;
+  }
+  function bindTooltips() {
+    const onPointer = (e) => {
+      const svg = e.target.closest && e.target.closest(".chart svg");
+      if (svg && svg.querySelector(".pt")) showTip(svg, e);
+      else hideTip();
+    };
+    document.addEventListener("pointermove", onPointer, { passive: true });
+    document.addEventListener("pointerdown", onPointer, { passive: true });
+    // a mouse leaving the page hides it; a finger lifting off the screen does not
+    document.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") hideTip(); });
+    // on touch screens, a real scroll (not a finger wobble) puts the tooltip away
+    let shownAt = 0;
+    document.addEventListener("pointerdown", () => { shownAt = window.scrollY; }, { passive: true });
+    window.addEventListener("scroll", () => { if (tipFor && matchMedia("(hover: none)").matches && Math.abs(window.scrollY - shownAt) > 40) hideTip(); }, { passive: true });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     bindRegionChips();
     bindRangeChips();
+    bindTooltips();
     // the build bakes the last 24 hours into the page, so the region switch works at once
     try {
       const baked = JSON.parse(($("#trend-data") || {}).textContent || "null");
