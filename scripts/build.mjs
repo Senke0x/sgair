@@ -15,9 +15,6 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(ROOT, "dist");
 const SITE = "https://sgairquality.com";
 const NAME = "SG Air Quality";
-// Browser key for the Maps JavaScript API. It is public by design; it is locked to
-// sgairquality.com by HTTP-referrer restrictions in Google Cloud Console.
-const GMAPS_KEY = process.env.GMAPS_KEY || "AIzaSyC16BH7J7sfEKqHBwwlmG35KKH6g8YANxQ";
 const ACTIONBOOK = "https://singapore-haze-air-quality-ndbd1pzo.actionbook.page/";
 const CLAUDE = "https://claude.ai/";
 
@@ -223,25 +220,6 @@ function windBlock() {
   return `<h3>Wind for the next 24 hours</h3>
       <div class="wind-row">${arrow}<p><strong>${esc(dir || "Variable")}</strong> winds, ${sp.low ?? "?"}–${sp.high ?? "?"} km/h. ${g.forecast?.text ? `${esc(g.forecast.text)}.` : ""}</p></div>
       <p class="meta">${southerly ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore." : from != null ? "Winds from this direction are less likely to bring smoke from the Indonesian fires." : ""} NEA forecast for ${esc(g.validPeriod?.text || "the next 24 hours")}.</p>`;
-}
-
-function mapBlock(view = "region") {
-  const hs = live.hotspots;
-  return `<div class="map-wrap">
-  <div class="map-tools" role="group" aria-label="Map view">
-    <button type="button" class="map-btn" data-view="region" aria-pressed="${view === "region"}">Fires and smoke</button>
-    <button type="button" class="map-btn" data-view="singapore" aria-pressed="${view === "singapore"}">Singapore regions</button>
-  </div>
-  <div class="map" id="map" data-key="${GMAPS_KEY}" data-view="${view}" role="region" aria-label="Map of fire hotspots and haze around Singapore">
-    <p class="map-placeholder muted">The map loads when you scroll here.</p>
-  </div>
-  <ul class="legend">
-    <li><span class="lg lg-hot"></span>Fire hotspot (NEA satellite detection${hs?.asOf ? `, ${fmtDT(hs.asOf)}` : ""})</li>
-    <li><span class="lg lg-mod"></span>Moderate smoke haze</li>
-    <li><span class="lg lg-den"></span>Dense smoke haze</li>
-    <li><span class="lg lg-sg"></span>Singapore 24-hr PSI</li>
-  </ul>
-</div>`;
 }
 
 function hotspotTable() {
@@ -486,7 +464,6 @@ const PM_TABLE = `<div class="table-wrap"><table class="pm-bands health">
     </tbody>
   </table></div>`;
 
-const mapScript = `<script src="/assets/map.js?v=${VER}" defer></script>`;
 const liveScripts = `<script src="/assets/live.js?v=${VER}" defer></script>\n<script src="/assets/charts.js?v=${VER}" defer></script>\n<script src="/assets/app.js?v=${VER}" defer></script>`;
 const PM_ADVICE = {
   "Band I Normal": "PM2.5 is in the normal band this hour. Outdoor plans are fine.",
@@ -604,21 +581,13 @@ ${hero("psi")}
   ${compareBlock()}
 </section>
 
-<section class="block" aria-labelledby="h-map">
-  <div class="block-head">
-    <h2 id="h-map">Fires and smoke around Singapore</h2>
-    <p>Satellite hotspots and smoke haze areas mapped by NEA, refreshed every 30 minutes. Winds from the south and south-east carry this smoke to Singapore.</p>
-  </div>
-  ${mapBlock("region")}
-</section>
-
 <section class="block" aria-labelledby="h-situation">
   <div class="block-head"><h2 id="h-situation">The haze situation now</h2></div>
   <p class="lede">${esc(summary)}</p>
   <ul class="points">${curated.background.map((p) => `<li>${esc(p)}</li>`).join("")}</ul>
   <div class="cards">
     <a class="card" href="/singapore-haze-policy/"><span class="card-k">Singapore</span><span class="card-t">Haze Task Force measures, masks, schools and work rules</span></a>
-    <a class="card" href="/indonesia-forest-fires/"><span class="card-k">Indonesia</span><span class="card-t">${hs ? `${num(hs.total)} hotspots on NEA's latest pass, mapped by area` : "Hotspots in Sumatra and Kalimantan"}</span></a>
+    <a class="card" href="/indonesia-forest-fires/"><span class="card-k">Indonesia</span><span class="card-t">${hs ? `${num(hs.total)} hotspots on NEA's latest pass, counted by area` : "Hotspots in Sumatra and Kalimantan"}</span></a>
     <a class="card" href="/malaysia-haze/"><span class="card-k">Malaysia</span><span class="card-t">School closures, API thresholds and the Sarawak emergency</span></a>
   </div>
 </section>
@@ -653,7 +622,7 @@ ${hero("psi")}
     description,
     body,
     bodyAttrs: `class="home"${snap ? ` data-band="${snap.band.key}"` : ""}`,
-    scripts: `${liveScripts}\n${mapScript}`,
+    scripts: liveScripts,
     jsonld: [
       { "@context": "https://schema.org", "@type": "WebSite", name: NAME, alternateName: ["sgairquality.com", "SG PSI live"], url: SITE + "/", inLanguage: "en-SG" },
       {
@@ -771,15 +740,14 @@ function indonesia() {
   const path = "/indonesia-forest-fires/";
   const hs = live.hotspots;
   const title = "Indonesia Forest Fires 2026: Sumatra and Kalimantan Hotspots";
-  const description = `Live map of Indonesian fire hotspots and smoke haze${hs ? ` (${num(hs.total)} on NEA's latest pass)` : ""}, counts by area, where Singapore's haze comes from and El Niño's role in 2026.`;
+  const description = `Indonesian fire hotspots${hs ? ` (${num(hs.total)} on NEA's latest pass)` : ""} counted by area, the daily trend, where Singapore's haze comes from and El Niño's role in 2026.`;
   const body = `
 <article class="page">
   <header class="page-head">
     <p class="crumb"><a href="/">PSI live</a> <span aria-hidden="true">/</span> Indonesia fires</p>
     <h1>Indonesia forest fires and hotspots, 2026</h1>
-    <p class="lede">Most of the haze over Singapore comes from forest and peatland fires in Sumatra and Kalimantan. The map, counts and headlines on this page refresh every 30 minutes.</p>
+    <p class="lede">Most of the haze over Singapore comes from forest and peatland fires in Sumatra and Kalimantan. The hotspot counts and headlines on this page refresh every 30 minutes.</p>
   </header>
-  <section aria-labelledby="h-map"><h2 id="h-map">Hotspot and smoke map</h2>${mapBlock("region")}</section>
   <section aria-labelledby="h-hotspots">
     <h2 id="h-hotspots">Hotspots by area</h2>
     ${hs ? `<p class="stat"><strong>${num(hs.total)}</strong> hotspots detected by NEA${hs.asOf ? ` on ${fmtDT(hs.asOf)}` : ""}.</p>` : ""}
@@ -807,7 +775,7 @@ function indonesia() {
     </ul>
   </section>
 </article>`;
-  return layout({ path, title, description, body, scripts: `<script src="/assets/live.js?v=${VER}" defer></script>\n${mapScript}`, jsonld: [article(title, description, path), crumbs("Indonesia fires", path)] });
+  return layout({ path, title, description, body, scripts: `<script src="/assets/live.js?v=${VER}" defer></script>`, jsonld: [article(title, description, path), crumbs("Indonesia fires", path)] });
 }
 
 // ---------- Malaysia ----------
@@ -882,7 +850,7 @@ write(
   "llms.txt",
   `# SG Air Quality (sgairquality.com)
 
-> Independent live tracker of Singapore's air quality: live 24-hour PSI and 1-hour PM2.5 for the North, South, East, West and Central regions (refreshed every 30 minutes from NEA), 24-hour PSI and PM2.5 trends, a haze forecast, a comparison of this haze season with last year, and a map of fire hotspots and smoke haze.
+> Independent live tracker of Singapore's air quality: live 24-hour PSI and 1-hour PM2.5 for the North, South, East, West and Central regions (refreshed every 30 minutes from NEA), 24-hour PSI and PM2.5 trends, a haze forecast, a comparison of this year with last year, and NEA fire hotspot counts.
 
 ${psiSentence}
 ${pmSentence}
@@ -890,10 +858,10 @@ ${live.advisory?.forecastBand ? `NEA 24-hour PSI forecast: ${live.advisory.forec
 ${yearSentence}
 
 ## Pages
-- [Singapore PSI live](${SITE}/): live PSI and PM2.5 by region, 24-hour trends, haze forecast, this year vs last year, hotspot map, FAQ
+- [Singapore PSI live](${SITE}/): live PSI and PM2.5 by region, 24-hour trends, haze forecast, this year vs last year, FAQ
 - [Singapore PM2.5 live](${SITE}/pm25/): live 1-hour PM2.5 by region, 24-hour PM2.5 trend, NEA PM2.5 bands
 - [Singapore haze measures](${SITE}/singapore-haze-policy/): Haze Task Force actions, N95 masks, MOE and MOM rules
-- [Indonesia forest fires](${SITE}/indonesia-forest-fires/): hotspot map and counts by area, causes, El Niño
+- [Indonesia forest fires](${SITE}/indonesia-forest-fires/): hotspot counts by area, daily trend, causes, El Niño
 - [Malaysia haze](${SITE}/malaysia-haze/): API thresholds, school closures, Sarawak emergency
 
 ## Data (JSON)
