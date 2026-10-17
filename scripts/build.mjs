@@ -68,6 +68,26 @@ function write(rel, html) {
   writeFileSync(out, html);
 }
 
+// Phones: every table stacks into cards (see style.css "stacked tables"). Each <td> gets a
+// data-label copied from its column header so the CSS can print the heading inside the card.
+const strip = (s) => s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+function labelTables(html) {
+  return html.replace(/<table\b[\s\S]*?<\/table>/g, (table) => {
+    const head = table.match(/<thead>[\s\S]*?<\/thead>/);
+    if (!head) return table;
+    const cols = [...head[0].matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map((m) => strip(m[1]).replace(/"/g, "&quot;"));
+    return table.replace(/<tbody>[\s\S]*?<\/tbody>/, (body) =>
+      body.replace(/<tr\b[^>]*>[\s\S]*?<\/tr>/g, (row) => {
+        let i = 0;
+        return row.replace(/<(th|td)\b([^>]*)>/g, (m, tag, attrs) => {
+          const label = cols[i++];
+          return tag === "td" && label && !/data-label=/.test(attrs) ? `<td data-label="${label}"${attrs}>` : m;
+        });
+      })
+    );
+  });
+}
+
 // ---------- live snapshot ----------
 const now = live.now;
 const psiVals = now ? REGIONS.map((r) => now.psi[r]).filter((v) => typeof v === "number") : [];
@@ -161,7 +181,7 @@ ${jsonld.map((j) => `<script type="application/ld+json">${JSON.stringify(j)}</sc
 <a class="skip" href="#main">Skip to content</a>
 ${header(path)}
 <main id="main">
-${body}
+${labelTables(body)}
 </main>
 ${footer()}
 ${scripts}
@@ -239,8 +259,8 @@ function hotspotTable() {
 // ---------- 24-hour PSI and PM2.5 trends ----------
 function trendBlock({ only } = {}) {
   const t = live.trend || { psi: [], pm: [] };
-  const chips = ["max", ...charts.REGIONS]
-    .map((r) => `<button type="button" class="map-btn" data-region="${r}" aria-pressed="${r === "max"}">${charts.NAME[r]}</button>`)
+  const chips = ["max", ...charts.ORDER]
+    .map((r) => `<button type="button" class="map-btn" data-region="${r}" aria-pressed="${r === "max"}">${r === "max" ? "Highest" : charts.NAME[r]}</button>`)
     .join("");
   const fig = (kind, id, h, note) => `<div class="trend-panel">
       <h3>${h}</h3>
@@ -396,10 +416,40 @@ const yearSentence = (() => {
   return `Over the 30 days to ${fmtDate(cd.end)}, Singapore's daily peak 24-hour PSI averaged ${pa}${ma != null ? ` and daily peak 24-hour PM2.5 averaged ${ma} µg/m³` : ""}, compared with ${pb}${mb != null ? ` and ${mb} µg/m³` : ""} over the same dates a year earlier.`;
 })();
 
+// ---------- which NEA region is my area in? ----------
+// People search for their own town ("psi in hillview today"), but NEA only publishes five regions.
+// Towns grouped by NEA's regional PSI map; the boundaries are coarse, so this is a guide.
+const AREAS = {
+  north: ["Woodlands", "Yishun", "Sembawang", "Admiralty", "Marsiling", "Mandai", "Khatib", "Canberra", "Seletar", "Punggol", "Sengkang"],
+  west: ["Jurong East", "Jurong West", "Clementi", "Bukit Batok", "Hillview", "Bukit Panjang", "Choa Chu Kang", "Tengah", "Boon Lay", "Pioneer", "Tuas", "Lim Chu Kang"],
+  central: ["Bishan", "Toa Payoh", "Ang Mo Kio", "Serangoon", "Hougang", "Novena", "Orchard", "Bukit Timah", "Thomson", "Kallang", "Potong Pasir", "Bugis", "Little India"],
+  east: ["Tampines", "Pasir Ris", "Bedok", "Changi", "Simei", "Paya Lebar", "Geylang", "Marine Parade", "Katong", "Loyang", "Ubi", "Eunos"],
+  south: ["Bukit Merah", "Telok Blangah", "Queenstown", "Redhill", "HarbourFront", "Sentosa", "Pasir Panjang", "Marina Bay", "Tanjong Pagar", "Alexandra", "Jurong Island"],
+};
+const areaSentence = (r) => {
+  const v = now?.psi?.[r], pm = now?.pm25_1h?.[r];
+  return typeof v === "number" ? ` 24-hr PSI ${v} (${bandOf(v).label.toLowerCase()})${pm != null ? `, 1-hr PM2.5 ${pm} µg/m³` : ""} right now.` : "";
+};
+function areaBlock() {
+  return `<div class="areas">${REGIONS.map((r) => {
+    const v = now?.psi?.[r], key = typeof v === "number" ? bandOf(v).key : "";
+    return `<div class="area" data-region="${r}"${key ? ` data-band="${key}"` : ""}>
+      <p class="area-h"><span class="area-r">${RNAME[r]}</span>${typeof v === "number" ? `<span class="area-v"><span class="pill ${key}">${v}</span> <span class="pm-tag">PSI now</span></span>` : ""}</p>
+      <p class="area-t">${AREAS[r].join(", ")}</p>
+    </div>`;
+  }).join("")}</div>
+  <p class="meta">Grouped by NEA's regional PSI map. Boundaries are approximate: if you live near the edge of two regions, check both. NEA does not publish readings for individual towns.</p>`;
+}
+const areaFaq = [
+  "Which PSI region is my area in?",
+  `NEA publishes one 24-hour PSI and one 1-hour PM2.5 reading for each of five regions, not for individual towns. ${REGIONS.map((r) => `${RNAME[r]}: ${AREAS[r].slice(0, 6).join(", ")}.${areaSentence(r)}`).join(" ")} The full list of towns is on this page.`,
+];
+
 // ---------- FAQ ----------
 const FAQ = [
   ...(snap ? [["What is the PSI in Singapore now?", `${psiSentence} The reading on this page updates live from NEA every 30 minutes.`]] : []),
   ...(pmSnap ? [["What is the PM2.5 level in Singapore now?", `${pmSentence} NEA publishes a new 1-hour PM2.5 reading every hour.`]] : []),
+  areaFaq,
   ["What is the PSI in Singapore?", "The Pollutant Standards Index is the air quality index used by Singapore's National Environment Agency. It combines six pollutants: PM2.5, PM10, ozone, carbon monoxide, sulphur dioxide and nitrogen dioxide. Each one gets a sub-index and the PSI is the highest of them. During haze, PM2.5 almost always sets the PSI."],
   ["What PSI level is unhealthy?", "A 24-hour PSI of 0 to 50 is good and 51 to 100 is moderate. 101 to 200 is unhealthy, 201 to 300 is very unhealthy, and anything above 300 is hazardous."],
   ["Should I look at the 24-hour PSI or the 1-hour PM2.5?", "Use the 24-hour PSI and NEA's forecast to plan the next day, and follow the health advice for that band. Use the 1-hour PM2.5 reading to decide on something you are about to do right now, such as a run."],
@@ -457,10 +507,10 @@ const PM_TABLE = `<div class="table-wrap"><table class="pm-bands health">
     <caption>NEA 1-hour PM2.5 bands</caption>
     <thead><tr><th scope="col">Band</th><th scope="col">1-hr PM2.5 (µg/m³)</th><th scope="col">What to do in the next hour or so</th></tr></thead>
     <tbody>
-      <tr class="b-good"><th scope="row"><span class="dot"></span>I Normal</th><td>0–55</td><td>Normal activities</td></tr>
-      <tr class="b-unhealthy"><th scope="row"><span class="dot"></span>II Elevated</th><td>56–150</td><td>Consider cutting back strenuous outdoor activity, especially sensitive groups</td></tr>
-      <tr class="b-very"><th scope="row"><span class="dot"></span>III High</th><td>151–250</td><td>Move strenuous activity indoors. Sensitive groups stay inside</td></tr>
-      <tr class="b-hazardous"><th scope="row"><span class="dot"></span>IV Very high</th><td>251 and above</td><td>Everyone stays indoors where possible</td></tr>
+      <tr class="b-good"><th scope="row"><span class="dot"></span>I Normal</th><td data-label="µg/m³">0–55</td><td data-label="Next hour or so">Normal activities</td></tr>
+      <tr class="b-unhealthy"><th scope="row"><span class="dot"></span>II Elevated</th><td data-label="µg/m³">56–150</td><td data-label="Next hour or so">Consider cutting back strenuous outdoor activity, especially sensitive groups</td></tr>
+      <tr class="b-very"><th scope="row"><span class="dot"></span>III High</th><td data-label="µg/m³">151–250</td><td data-label="Next hour or so">Move strenuous activity indoors. Sensitive groups stay inside</td></tr>
+      <tr class="b-hazardous"><th scope="row"><span class="dot"></span>IV Very high</th><td data-label="µg/m³">251 and above</td><td data-label="Next hour or so">Everyone stays indoors where possible</td></tr>
     </tbody>
   </table></div>`;
 
@@ -479,11 +529,11 @@ function readingsTable() {
         .sort((a, b) => now.psi[b] - now.psi[a])
         .map((k) => {
           const bb = bandOf(now.psi[k]), p1 = now.pm25_1h?.[k];
-          return `<tr><th scope="row">${RNAME[k]}</th><td><span class="pill ${bb.key}">${now.psi[k]}</span> <span class="pm-tag">${bb.label}</span></td><td>${p1 != null ? `<span class="pill ${pmKey(p1)}">${p1}</span> <span class="pm-tag">${pmBand(p1)}</span>` : "–"}</td><td>${now.pm25_24h?.[k] ?? "–"}</td><td>${now.pm10_24h?.[k] ?? "–"}</td><td>${now.o3_8h?.[k] ?? "–"}</td></tr>`;
+          return `<tr><th scope="row">${RNAME[k]}</th><td data-label="24-hr PSI"><span class="pill ${bb.key}">${now.psi[k]}</span> <span class="pm-tag">${bb.label}</span></td><td data-label="1-hr PM2.5">${p1 != null ? `<span class="pill ${pmKey(p1)}">${p1}</span> <span class="pm-tag">${pmBand(p1)}</span>` : "–"}</td><td data-label="24-hr PM2.5">${now.pm25_24h?.[k] ?? "–"}</td><td data-label="24-hr PM10">${now.pm10_24h?.[k] ?? "–"}</td><td data-label="8-hr O₃">${now.o3_8h?.[k] ?? "–"}</td></tr>`;
         })
         .join("")
     : `<tr><td colspan="6" class="muted">Loading…</td></tr>`;
-  return `<div class="table-wrap"><table class="readings" id="readings">
+  return `<div class="table-wrap readings-wrap"><table class="readings" id="readings">
     <thead><tr><th scope="col">Region</th><th scope="col">24-hr PSI</th><th scope="col">1-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM2.5 <small>µg/m³</small></th><th scope="col">24-hr PM10 <small>µg/m³</small></th><th scope="col">8-hr O₃ <small>µg/m³</small></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -517,7 +567,7 @@ function hero(lead) {
   <div class="sky" aria-hidden="true"><div class="haze-layer"></div>${skyline}</div>
   <div class="hero-inner">
     <div class="hero-main">
-      <h1 id="h1">${isPm ? "Singapore PM2.5 live" : "Singapore PSI live"} <span class="h1-sub">${isPm ? "1-hour PM2.5 and PSI now" : "PSI and PM2.5 readings now"}</span></h1>
+      <h1 id="h1">${isPm ? "Singapore PM2.5 live" : "Singapore PSI live"} <span class="h1-sub">${isPm ? "1-hour PM2.5 and PSI now, by region, updated every 30 minutes" : "PSI now and today's readings by region, updated every 30 minutes"}</span></h1>
       <div class="readouts${isPm ? " pm-first" : ""}" aria-live="polite">${isPm ? pmRO + psiRO : psiRO + pmRO}</div>
       <p class="advice" id="${isPm ? "pm-advice" : "psi-advice"}">${isPm ? (pmSnap ? PM_ADVICE[pmBand(pmSnap.max)] : "Readings load from NEA every 30 minutes.") : snap ? ADVICE[snap.band.key] : "Readings load from the National Environment Agency every 30 minutes."}</p>
       <p class="stamp"><span class="live" title="Readings update automatically every 30 minutes"><span class="live-dot" aria-hidden="true"></span>Live</span> <span id="psi-time">${stampText}</span> <span id="last-refresh" class="muted">Last refreshed ${fmtDT(GENERATED)}</span></p>
@@ -551,10 +601,18 @@ ${hero("psi")}
 
 <section class="block" aria-labelledby="h-trend">
   <div class="block-head">
-    <h2 id="h-trend">PSI and PM2.5 trend, last 24 hours</h2>
-    <p>Hourly NEA readings. Pick a region to see its own line. Shaded bands mark the official categories.</p>
+    <h2 id="h-trend">PSI and PM2.5 today, hour by hour</h2>
+    <p>Hourly NEA readings for the last 24 hours. Pick a region to see its own line. Shaded bands mark the official categories.</p>
   </div>
   ${trendBlock()}
+</section>
+
+<section class="block" aria-labelledby="h-areas">
+  <div class="block-head">
+    <h2 id="h-areas">Which region is my area in?</h2>
+    <p>NEA reports five regions, not towns. Find yours to know which reading applies to you.</p>
+  </div>
+  ${areaBlock()}
 </section>
 
 <section class="block two" aria-labelledby="h-forecast">
@@ -757,7 +815,7 @@ function indonesia() {
   </section>
   <section aria-labelledby="h-hl"><h2 id="h-hl">Latest Indonesia headlines</h2>${headlineList("id", 8)}</section>
   <section aria-labelledby="h-why">
-    <h2 id="h-why">Why the fires happen</h2>
+    <h2 id="h-why">Kalimantan and southern Sumatra: where the smoke comes from</h2>
     <p>Large areas of Sumatra and Kalimantan sit on peat, thick layers of waterlogged plant matter. When peatland is drained for plantations it dries out, and fires lit to clear land, often called slash-and-burn, can spread underground and smoulder for weeks. Peat smoke is dense and rich in fine particles, which is why it pushes up PM2.5 so sharply.</p>
     <p>From roughly August to October, winds over the region blow from the south-east and south. That carries smoke from southern Sumatra (South Sumatra, Jambi, Riau) and from West and Central Kalimantan towards Singapore and Peninsular Malaysia. Sarawak, which borders Kalimantan, is often hit first.</p>
   </section>

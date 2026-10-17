@@ -182,11 +182,11 @@
           const pp = p1 != null ? pmBandOf(p1) : null;
           return `<tr>
           <th scope="row">${REGION_NAME[k]}</th>
-          <td><span class="pill ${bb.key}">${psi[k]}</span> <span class="pm-tag">${bb.label}</span></td>
-          <td>${p1 != null ? `<span class="pill ${pp.key}">${p1}</span> <span class="pm-tag">${pp.label}</span>` : "–"}</td>
-          <td>${r.pm25_twenty_four_hourly?.[k] ?? "–"}</td>
-          <td>${r.pm10_twenty_four_hourly?.[k] ?? "–"}</td>
-          <td>${r.o3_eight_hour_max?.[k] ?? "–"}</td>
+          <td data-label="24-hr PSI"><span class="pill ${bb.key}">${psi[k]}</span> <span class="pm-tag">${bb.label}</span></td>
+          <td data-label="1-hr PM2.5">${p1 != null ? `<span class="pill ${pp.key}">${p1}</span> <span class="pm-tag">${pp.label}</span>` : "–"}</td>
+          <td data-label="24-hr PM2.5">${r.pm25_twenty_four_hourly?.[k] ?? "–"}</td>
+          <td data-label="24-hr PM10">${r.pm10_twenty_four_hourly?.[k] ?? "–"}</td>
+          <td data-label="8-hr O₃">${r.o3_eight_hour_max?.[k] ?? "–"}</td>
         </tr>`;
         })
         .join("");

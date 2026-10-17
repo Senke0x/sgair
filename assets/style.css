@@ -385,8 +385,13 @@ tbody tr:last-child > * { border-bottom: 0; }
   .trend-grid, .cmp-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
-  .chart .axis text,   .chart .bands text { font-size: 15px; }
-  }
+  .chart .axis text { font-size: 13px; }
+  .chart .bands text { font-size: 12.5px; }
+}
+/* band labels sit on the line sometimes: give them a halo so they stay legible */
+.chart .bands text, .chart .now text, .cmp-chart .limit-t {
+  paint-order: stroke; stroke: var(--panel); stroke-width: 3.5px; stroke-linejoin: round;
+}
 
 /* chart tooltips */
 .chart { position: relative; }
@@ -414,3 +419,108 @@ tbody tr:last-child > * { border-bottom: 0; }
 .chart-tip .sw.band-good { background: var(--good); } .chart-tip .sw.band-moderate { background: var(--moderate); }
 .chart-tip .sw.band-unhealthy { background: var(--unhealthy); } .chart-tip .sw.band-very { background: var(--very); }
 .chart-tip .sw.band-hazardous { background: var(--hazardous); }
+
+/* ---------- v4: phones first ----------
+ * Most visitors arrive on a phone. Below 640px every data table stacks into cards
+ * (one card per region or band, headings printed inside from data-label), the region
+ * switch and the main nav become one scrollable row, and the hero gets tighter. */
+.map-tools { scrollbar-width: none; }
+.map-tools::-webkit-scrollbar { display: none; }
+.map-btn { white-space: nowrap; min-height: 40px; }
+
+@media (max-width: 640px) {
+  :root { --gutter: 16px; }
+  body { font-size: 1rem; }
+
+  /* main nav: one row, scrolls sideways, current page stays visible */
+  .site-head { padding: 10px 0 0 var(--gutter); gap: 8px; align-items: flex-start; flex-direction: column; }
+  .site-head nav {
+    flex-wrap: nowrap; gap: 0; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; margin-left: calc(var(--gutter) * -1); padding: 0 var(--gutter);
+    scroll-padding: 0 var(--gutter);
+  }
+  .site-head nav::-webkit-scrollbar { display: none; }
+  .site-head nav a { padding: 8px 14px 10px; font-size: .95rem; white-space: nowrap; border-bottom-width: 3px; }
+  .site-head nav a:first-child { padding-left: 0; }
+
+  /* hero */
+  .hero { padding-top: 0; }
+  .hero-inner { gap: 20px; padding-bottom: 96px; }
+  .hero h1 { font-size: 1.75rem; }
+  .readouts { gap: 6px 24px; margin-top: 6px; }
+  .psi-num { font-size: 6rem; }
+  .ro-pm .psi-num, .pm-first .ro-psi .psi-num { font-size: 3.4rem; }
+  .pm-first .ro-pm .psi-num { font-size: 6rem; }
+  .advice { font-size: 1rem; max-width: none; }
+  .compass { gap: 6px; }
+  .reg { min-height: 0; padding: 7px 9px 8px; border-top-width: 5px; }
+  .reg-name { font-size: .8rem; }
+  .reg-psi { font-size: 1.9rem; margin: 2px 0; }
+  .reg-pm { font-size: .78rem; }
+
+  .block { padding-top: 36px; }
+  .block-head { margin-bottom: 14px; }
+  h2 { font-size: 1.4rem; }
+
+  /* stacked tables: card per row. Narrow 2-column tables (.bars) stay as tables. */
+  .table-wrap:not(.keep-table) { overflow: visible; border: 0; background: none; border-radius: 0; }
+  table:not(.bars) { display: block; font-size: 1rem; }
+  table:not(.bars) caption { display: block; padding: 0 0 8px; }
+  table:not(.bars) thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  table:not(.bars) tbody { display: grid; gap: 10px; }
+  table:not(.bars) tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  table:not(.bars) th, table:not(.bars) td { border: 0; padding: 0; white-space: normal; }
+  table:not(.bars) th[scope="row"] { grid-column: 1 / -1; font-size: 1.05rem; font-weight: 700; min-width: 0; padding-bottom: 2px; }
+  table:not(.bars) td { grid-column: 1 / -1; }
+  table:not(.bars) td[data-label]::before { content: attr(data-label); display: block; font-size: .78rem; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+
+  /* live readings: PSI and PM2.5 side by side, the three minor numbers in a small row */
+  .readings tr { grid-template-areas: "n n n n n n" "a a a b b b" "c c d d e e"; }
+  .readings th[scope="row"] { grid-area: n; }
+  .readings td:nth-of-type(1) { grid-area: a; } .readings td:nth-of-type(2) { grid-area: b; }
+  .readings td:nth-of-type(3) { grid-area: c; } .readings td:nth-of-type(4) { grid-area: d; } .readings td:nth-of-type(5) { grid-area: e; }
+  .readings td:nth-of-type(3), .readings td:nth-of-type(4), .readings td:nth-of-type(5) { padding-top: 8px; border-top: 1px solid var(--line); margin-top: 4px; color: var(--muted); font-size: .95rem; }
+  .readings td:nth-of-type(3)::before, .readings td:nth-of-type(4)::before, .readings td:nth-of-type(5)::before { display: inline; margin-right: 6px; font-weight: 500; }
+  .readings .pill { font-size: 1.3rem; padding: 3px 12px; min-width: 2.8em; }
+  .readings .pm-tag { display: block; margin: 3px 0 0; font-size: .85rem; }
+  .readings td[colspan] { grid-column: 1 / -1; }
+
+  /* health advice: the band is the card title, the three groups stack */
+  .health th[scope="row"] { display: flex; align-items: center; gap: 8px; }
+  .health th[scope="row"] .dot { width: 12px; height: 12px; margin: 0; flex: none; }
+  .b-good th[scope="row"] { color: var(--good); } .b-unhealthy th[scope="row"] { color: var(--unhealthy); }
+  .b-very th[scope="row"] { color: var(--very); } .b-hazardous th[scope="row"] { color: var(--hazardous); }
+  .pm-bands tr { grid-template-areas: "n n n r r r" "w w w w w w"; align-items: start; }
+  .pm-bands th[scope="row"] { grid-area: n; }
+  .pm-bands td:nth-of-type(1) { grid-area: r; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .pm-bands td:nth-of-type(2) { grid-area: w; }
+
+  /* region switch and comparison switch: one row that scrolls sideways */
+  .map-tools { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; gap: 6px; margin: 0 calc(var(--gutter) * -1) 8px; padding: 2px var(--gutter) 6px; scroll-padding-inline: var(--gutter); }
+  .map-tools::after { content: ""; flex: none; width: 1px; } /* keeps the right gutter inside the scroll area */
+  .map-btn { flex: none; font-size: .95rem; padding: 7px 15px; }
+  .trend-grid, .cmp-grid { gap: 22px; }
+  .chart { padding: 10px 6px 6px; border-radius: 9px; }
+  .chart figcaption { padding-top: 8px; font-size: .9rem; }
+  .cmp-tools { gap: 6px 14px; }
+  .cmp-legend { font-size: .88rem; }
+
+  .days { gap: 6px; }
+  .day { padding: 10px 8px 10px 10px; }
+  .day-psi { font-size: 1.9rem; }
+  .outlook, .wind { padding: 14px; }
+  .outlook-range { font-size: 1.15rem; }
+  .hl-cols { gap: 4px; }
+  .foot-grid { padding-top: 24px; gap: 18px; }
+  .credits { gap: 6px 20px; }
+}
+
+/* which region is my area in */
+.areas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.area { background: var(--panel); border: 1px solid var(--line); border-left: 5px solid var(--ab, var(--line)); border-radius: 10px; padding: 12px 14px; }
+.area[data-band="good"] { --ab: var(--good); } .area[data-band="moderate"] { --ab: var(--moderate); }
+.area[data-band="unhealthy"] { --ab: var(--unhealthy); } .area[data-band="very"] { --ab: var(--very); } .area[data-band="hazardous"] { --ab: var(--hazardous); }
+.area-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+.area-r { font-weight: 700; font-size: 1.05rem; }
+.area-v .pm-tag { margin-left: 4px; }
+.area-t { margin: 0; color: var(--muted); font-size: .95rem; line-height: 1.45; }
