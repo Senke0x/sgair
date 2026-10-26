@@ -17,6 +17,7 @@
 
   const $ = (sel) => document.querySelector(sel);
   const setText = (sel, v) => { const el = $(sel); if (el) el.textContent = v; };
+  const escH = (t = "") => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const state = { lastLoad: 0, loading: false, cache: {}, rows: { psi: [], pm: [] }, region: "max" };
   try { state.region = localStorage.getItem(REGION_KEY) || "max"; } catch { /* storage blocked: fine */ }
 
@@ -300,8 +301,8 @@
     const arrow = from == null ? "" : `<svg class="wind-arrow" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25"/><g transform="rotate(${from + 180} 27 27)"><path d="M27 7l9 16h-6v20h-6V23h-6z"/></g></svg>`;
     const sp = g.wind.speed || {};
     box.innerHTML = `<h3>Wind for the next 24 hours</h3>
-      <div class="wind-row">${arrow}<p><strong>${dir || "Variable"}</strong> winds, ${sp.low ?? "?"}–${sp.high ?? "?"} km/h. ${g.forecast?.text ? `${g.forecast.text}.` : ""}</p></div>
-      <p class="meta">${southerly ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore." : from != null ? "Winds from this direction are less likely to bring smoke from the Indonesian fires." : ""} NEA forecast for ${g.validPeriod?.text || "the next 24 hours"}.</p>`;
+      <div class="wind-row">${arrow}<p><strong>${escH(dir || "Variable")}</strong> winds, ${escH(sp.low ?? "?")}–${escH(sp.high ?? "?")} km/h. ${g.forecast?.text ? `${escH(g.forecast.text)}.` : ""}</p></div>
+      <p class="meta">${southerly ? "Winds from the south and south-east can carry smoke from fires in Sumatra and Kalimantan towards Singapore." : from != null ? "Winds from this direction are less likely to bring smoke from the Indonesian fires." : ""} NEA forecast for ${escH(g.validPeriod?.text || "the next 24 hours")}.</p>`;
   }
 
   // ---------- main loop ----------

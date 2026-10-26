@@ -1,40 +1,27 @@
 # sgairquality.com
 
-Static haze tracker for Singapore. No server, no database, no npm install.
+Live Singapore haze tracker: 24-hr PSI, PM2.5, NEA forecast, fire hotspots and regional haze news.
+A static site with no server, no database and no npm dependencies (Node 20+).
 
-## How the data stays fresh (every 30 minutes)
+## How it works
 
-| What | How often | How |
-|---|---|---|
-| 24-hr PSI, 1-hr PM2.5 and the last 24 hours by region | every 30 min | `scripts/update.mjs` → `data/live.json` (2 NEA calls per run: today's PSI and PM2.5; earlier rows are reused) |
-| NEA 24-hr PSI forecast, wind and situation update | every 30 min | same |
-| NEA fire hotspots (counts by area) | every 30 min | same, from the KML files on haze.gov.sg |
-| SG / Indonesia / Malaysia headlines | every 30 min | same, from Google News RSS (title, publisher, time, link) |
-| 3-day PSI estimate | every 30 min while the page is open | browser calls Open-Meteo (CAMS model), scaled to NEA's latest reading |
-| Readings and charts baked into the HTML (SEO) | every 30 min | `scripts/build.mjs` + `assets/charts.js` |
-| Daily hotspot totals | daily | `data/history.json`, committed by the workflow |
-| Daily peak PSI and PM2.5, past year and the year before (this year vs last year) | daily | `scripts/daily.mjs` → `data/daily.json`: one NEA call per day, each day fetched once. Missing days are filled at most 12 per run (latest month first), then 1 call a day |
-| Background and "Key events" summaries | by hand | `data/updates.json` |
+A GitHub Actions job (`.github/workflows/update.yml`) runs every 30 minutes:
 
-Visitors' browsers do not call data.gov.sg: they read `/data/live.json`, so NEA's load stays the same however many people visit. Only if that copy is more than 90 minutes old does the page ask data.gov.sg for the latest reading.
+1. `scripts/update.mjs` fetches the latest NEA readings, haze advisory, hotspots, weather and headlines into `data/live.json`
+2. `scripts/daily.mjs` adds each day's peak PSI and PM2.5 to `data/daily.json` (this year vs last year, one NEA call per day)
+3. `scripts/build.mjs` renders the pages into `dist/` and deploys them to GitHub Pages
 
-GitHub Actions (`.github/workflows/update.yml`) runs `update.mjs` → `build.mjs` → deploys `dist/` to GitHub Pages at :07 and :37 past each hour. Open tabs also re-read `data/live.json` every 30 minutes (`assets/live.js`), so nobody has to reload.
+Visitors' browsers read `/data/live.json`, not NEA, so traffic adds no load to government APIs. The browser only calls data.gov.sg directly if that file is more than 90 minutes old.
 
-GitHub may start scheduled jobs a few minutes late at busy times. The live PSI numbers don't depend on it, because they come straight from NEA in the browser.
+`data/updates.json` holds the hand-written background and key events.
 
-## Deploy
+## Run locally
 
-1. Create a **public** GitHub repo and push this folder (Actions minutes are free for public repos).
-2. Repo Settings → Pages → Source: **GitHub Actions**.
-3. Actions tab → "Refresh data and deploy" → Run workflow (the first run deploys the site).
-4. Settings → Pages → Custom domain: `sgairquality.com`, tick Enforce HTTPS.
-5. DNS at your registrar:
-   - `A` records for `@`: 185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153
-   - `CNAME` for `www` → `<your-github-username>.github.io`
-6. Google Search Console + Bing Webmaster Tools: verify the domain, submit `https://sgairquality.com/sitemap.xml`.
+```sh
+node scripts/update.mjs && node scripts/daily.mjs && node scripts/build.mjs
+python3 -m http.server -d dist 8000
+```
 
-## Notes
+## Data sources
 
-- data.gov.sg rate-limits unauthenticated calls per IP. The workflow makes about 3 calls per run (PSI, PM2.5, weather) plus one a day for `daily.json`. Never put a data.gov.sg API key in browser code.
-- Open-Meteo is free for non-commercial use. Buy a plan if the site carries ads.
-- Headlines show only the publisher's title and a link. Write any summaries in `updates.json` in your own words.
+NEA / data.gov.sg (PSI, PM2.5, weather), haze.gov.sg (advisory, hotspots), Open-Meteo CAMS (3-day estimate, free for non-commercial use), Google News RSS (headline titles and links only).

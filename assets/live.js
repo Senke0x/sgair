@@ -45,7 +45,7 @@
       const limit = ul.children.length || 6;
       ul.innerHTML = items
         .slice(0, limit)
-        .map((h) => `<li><a href="${esc(h.url)}" rel="noopener nofollow" target="_blank">${esc(h.title)}</a><span class="hl-meta">${esc(h.source)}, <time datetime="${h.publishedAt}">${fmtDT(h.publishedAt)}</time></span></li>`)
+        .map((h) => `<li><a href="${/^https?:\/\//i.test(h.url) ? esc(h.url) : "#"}" rel="noopener nofollow" target="_blank">${esc(h.title)}</a><span class="hl-meta">${esc(h.source)}, <time datetime="${h.publishedAt}">${fmtDT(h.publishedAt)}</time></span></li>`)
         .join("");
     });
   }
